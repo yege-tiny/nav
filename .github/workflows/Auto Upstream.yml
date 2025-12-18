@@ -1,0 +1,114 @@
+name: Auto Sync Real Upstream
+
+on:
+  schedule:
+    - cron: "0 */12 * * *"   # 每 12 小时同步一次
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # 完整历史，方便做 merge-base 判断
+
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      # 自动检测当前仓库的真实上游 + 默认分支
+      - name: Detect upstream repo & branch
+        id: detect
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          echo "调用 GitHub API: $api"
+
+          json=$(curl -sS \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$api")
+
+          is_fork=$(echo "$json" | jq -r '.fork')
+
+          if [ "$is_fork" != "true" ]; then
+            echo "当前仓库不是 fork 仓库，跳过同步。"
+            exit 0
+          fi
+
+          upstream_full_name=$(echo "$json" | jq -r '.parent.full_name')
+          upstream_default_branch=$(echo "$json" | jq -r '.parent.default_branch')
+
+          echo "检测到真实上游：$upstream_full_name"
+          echo "上游默认分支：$upstream_default_branch"
+
+          if [ -z "$upstream_full_name" ] || [ "$upstream_full_name" = "null" ]; then
+            echo "未能获取上游仓库名称，退出。"
+            exit 1
+          fi
+
+          if [ -z "$upstream_default_branch" ] || [ "$upstream_default_branch" = "null" ]; then
+            echo "未能获取上游默认分支，默认使用 main。"
+            upstream_default_branch="main"
+          fi
+
+          echo "upstream_repo=$upstream_full_name" >> "$GITHUB_OUTPUT"
+          echo "upstream_branch=$upstream_default_branch" >> "$GITHUB_OUTPUT"
+
+      # 配置 git 身份，避免 merge 时 "Committer identity unknown"
+      - name: Configure git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # 仅当上游确实比本地“新”时才同步
+      - name: Sync from real upstream
+        run: |
+          set -e
+
+          UPSTREAM_REPO="${{ steps.detect.outputs.upstream_repo }}"
+          UPSTREAM_BRANCH="${{ steps.detect.outputs.upstream_branch }}"
+
+          echo "使用的上游仓库：$UPSTREAM_REPO"
+          echo "使用的上游分支：$UPSTREAM_BRANCH"
+
+          if [ -z "$UPSTREAM_REPO" ]; then
+            echo "没有获取到上游仓库，退出。"
+            exit 1
+          fi
+
+          git remote add upstream "https://github.com/$UPSTREAM_REPO.git" || true
+          git remote set-url upstream "https://github.com/$UPSTREAM_REPO.git"
+
+          git fetch upstream "$UPSTREAM_BRANCH"
+
+          # 确保有同名分支，没有就新建一个
+          git checkout "$UPSTREAM_BRANCH" 2>/dev/null || git checkout -b "$UPSTREAM_BRANCH"
+
+          LOCAL=$(git rev-parse HEAD)
+          REMOTE=$(git rev-parse "upstream/$UPSTREAM_BRANCH")
+
+          echo "本地 HEAD:   $LOCAL"
+          echo "上游 HEAD:   $REMOTE"
+
+          # 仅当上游有“本地没有”的新提交时才同步：
+          # 即：REMOTE 不是 LOCAL 的祖先，说明本地落后或发生分叉
+          if git merge-base --is-ancestor "$REMOTE" "$LOCAL"; then
+            echo "✅ 本地已包含上游提交（可能还领先），无需同步。"
+            exit 0
+          fi
+
+          echo "🔄 检测到上游有本地未包含的新提交，开始同步..."
+          git merge "upstream/$UPSTREAM_BRANCH" --no-edit
+          git push origin "$UPSTREAM_BRANCH"
+          echo "✅ 同步完成（已更新 origin）"
