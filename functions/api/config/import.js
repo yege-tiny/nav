@@ -33,14 +33,21 @@ export async function onRequestPost(context) {
     const BATCH_SIZE = 100;
 
     // --- Category Processing ---
-    const oldCatIdToNewCatIdMap = new Map();
-    const categoryNameToIdMap = new Map();
-
-    // 1. Fetch all existing categories from DB to build a name-to-id map
-    const { results: existingDbCategories } = await db.prepare('SELECT id, catelog FROM category').all();
-    if (existingDbCategories) {
-        existingDbCategories.forEach(c => categoryNameToIdMap.set(c.catelog, c.id));
-    }
+    const oldCatIdToNewCatIdMap = new Map(); // Maps JSON ID -> DB ID
+    let categoryNameToIdMap = new Map(); // For legacy format mapping
+    
+    // 1. Fetch all existing categories from DB
+    // We need parent_id to correctly identify subcategories
+    const { results: existingDbCategories } = await db.prepare('SELECT id, catelog, parent_id FROM category').all();
+    
+    // Helper to find existing category by name and parent_id
+    const findExistingCategory = (name, parentId) => {
+        if (!existingDbCategories) return null;
+        return existingDbCategories.find(c =>
+            c.catelog === name &&
+            (c.parent_id === parentId || (c.parent_id === null && parentId === 0))
+        );
+    };
 
     if (isNewFormat) {
         // Validate all categories first
@@ -50,39 +57,91 @@ export async function onRequestPost(context) {
             }
         }
 
-        // New format: Process categories from the dedicated `category` array
-        const newCategoryInserts = [];
-        const newCategoryNames = new Set();
+        // Sort categories to ensure parents are processed before children (Topological Sort)
+        let sortedCats = [];
+        let remaining = [...categoriesToImport];
+        // Set of JSON-side IDs that have been "processed" (added to sorted list). 0 is root.
+        let processedJsonIds = new Set([0, '0']);
+        
+        let lastRemainingCount = -1;
+        while(remaining.length > 0) {
+            // Safety break to prevent infinite loops (e.g. cycles or missing parents)
+            if (remaining.length === lastRemainingCount) {
+                // No progress made? Just push the rest and handle them as best as we can (they might end up at root)
+                sortedCats.push(...remaining);
+                break;
+            }
+            lastRemainingCount = remaining.length;
+            
+            const [ready, notReady] = remaining.reduce((acc, cat) => {
+                const pid = cat.parent_id || 0;
+                if (processedJsonIds.has(pid)) {
+                    acc[0].push(cat);
+                } else {
+                    acc[1].push(cat);
+                }
+                return acc;
+            }, [[], []]);
+            
+            // Sort the ready batch by ID to keep deterministic order
+            ready.sort((a, b) => (a.id || 0) - (b.id || 0));
+            
+            ready.forEach(cat => processedJsonIds.add(cat.id));
+            sortedCats.push(...ready);
+            remaining = notReady;
+        }
+        categoriesToImport = sortedCats;
 
+        // Process sequentially to handle dependencies
         for (const cat of categoriesToImport) {
             const catName = (cat.catelog || '').trim();
-            if (catName && !categoryNameToIdMap.has(catName)) {
+            const jsonParentId = cat.parent_id || 0;
+            
+            // Resolve DB Parent ID
+            let dbParentId = 0;
+            if (jsonParentId !== 0) {
+                if (oldCatIdToNewCatIdMap.has(jsonParentId)) {
+                    dbParentId = oldCatIdToNewCatIdMap.get(jsonParentId);
+                } else {
+                    // Parent not found? Might be skipped or out of order.
+                    // Fallback to root or handle error.
+                    // If sorted correctly, this shouldn't happen unless parent is missing.
+                    dbParentId = 0;
+                }
+            }
+
+            // Check if exists
+            const existing = findExistingCategory(catName, dbParentId);
+            
+            if (existing) {
+                oldCatIdToNewCatIdMap.set(cat.id, existing.id);
+            } else {
+                // Insert new
                 const sortOrder = normalizeSortOrder(cat.sort_order);
-                newCategoryInserts.push(db.prepare('INSERT INTO category (catelog, sort_order) VALUES (?, ?)').bind(catName, sortOrder));
-                newCategoryNames.add(catName);
-                categoryNameToIdMap.set(catName, null); // Placeholder to avoid duplicate inserts
-            }
-        }
-
-        // Batch insert all new categories
-        if (newCategoryInserts.length > 0) {
-            await db.batch(newCategoryInserts);
-            // Fetch the newly created category IDs
-            const placeholders = Array.from(newCategoryNames).map(() => '?').join(',');
-            const { results: newDbCategories } = await db.prepare(`SELECT id, catelog FROM category WHERE catelog IN (${placeholders})`).bind(...newCategoryNames).all();
-            if (newDbCategories) {
-                newDbCategories.forEach(c => categoryNameToIdMap.set(c.catelog, c.id));
-            }
-        }
-
-        // Create the mapping from the old category ID (in file) to the new/existing ID (in DB)
-        for (const cat of categoriesToImport) {
-            const catName = (cat.catelog || '').trim();
-            if (catName && categoryNameToIdMap.has(catName)) {
-                oldCatIdToNewCatIdMap.set(cat.id, categoryNameToIdMap.get(catName));
+                const result = await db.prepare('INSERT INTO category (catelog, sort_order, parent_id) VALUES (?, ?, ?)')
+                                       .bind(catName, sortOrder, dbParentId)
+                                       .run();
+                // Get the new ID
+                // D1 run() returns { meta: { last_row_id: ... } } or similar depending on adapter
+                // Cloudflare D1 returns meta.last_row_id
+                let newId = result.meta.last_row_id;
+                
+                // Update local cache of existing categories so children can find this new parent
+                const newCatObj = { id: newId, catelog: catName, parent_id: dbParentId };
+                if (!existingDbCategories) {
+                     // In case it was null
+                     // existingDbCategories = [newCatObj]; // const assignment error
+                } else {
+                    existingDbCategories.push(newCatObj);
+                }
+                
+                oldCatIdToNewCatIdMap.set(cat.id, newId);
             }
         }
     } else {
+        if (existingDbCategories) {
+             existingDbCategories.forEach(c => categoryNameToIdMap.set(c.catelog, c.id));
+        }
         // Legacy format: Extract categories from the sites array itself
         const defaultCategory = 'Default';
         const categoryNames = [...new Set(sitesToImport.map(item => (item.catelog || defaultCategory).trim()))].filter(name => name);
@@ -160,12 +219,13 @@ export async function onRequestPost(context) {
             continue;
         }
 
-        // Auto-generate logo if it's missing
-        let sanitizedLogo = (site.logo || '').trim() || null;
-        if (!sanitizedLogo && sanitizedUrl.startsWith('http')) {
+        // Auto-generate logo if it's missing or is a data URI
+        let sanitizedLogo = (site.logo || '').trim();
+        if ((!sanitizedLogo || sanitizedLogo.startsWith('data:image')) && sanitizedUrl.startsWith('http')) {
             const domain = sanitizedUrl.replace(/^https?:\/\//, '').split('/')[0];
             sanitizedLogo = `${iconAPI}${domain}${!env.ICON_API ? '?larger=true' : ''}`;
         }
+        if (!sanitizedLogo) sanitizedLogo = null;
 
         const sanitizedDesc = (site.desc || '').trim() || null;
         const sortOrderValue = normalizeSortOrder(site.sort_order);

@@ -1,12 +1,35 @@
 // functions/api/categories/index.js
 import { isAdminAuthenticated, errorResponse, jsonResponse, normalizeSortOrder } from '../../_middleware';
 
+let columnsChecked = false;
+
 export async function onRequestGet(context) {
   const { request, env } = context;
 
+  // Note: This API is currently protected. If it is needed for public "Add Site", it should be public or have a public variant.
+  // Assuming Admin usage for now.
   if (!(await isAdminAuthenticated(request, env))) {
+    // Check if it's a request from the "Add Site" modal (visitor).
+    // If we want to allow visitors to see categories, we should remove this check or make it conditional.
+    // For now, I will keep it as is, but if the user wants public submission to work, this might need change.
+    // But the task is about "Multi-level Menu", which is SSR.
     return errorResponse('Unauthorized', 401);
   }
+  
+  if (!columnsChecked) {
+      try {
+          await env.NAV_DB.prepare("SELECT parent_id FROM category LIMIT 1").first();
+          columnsChecked = true;
+      } catch (e) {
+          try {
+              await env.NAV_DB.prepare("ALTER TABLE category ADD COLUMN parent_id INTEGER DEFAULT 0").run();
+              columnsChecked = true;
+          } catch (e2) {
+              console.error("Failed to add parent_id", e2);
+          }
+      }
+  }
+
   const url = new URL(request.url);
   const page = parseInt(url.searchParams.get('page') || '1', 10);
   const pageSize = parseInt(url.searchParams.get('pageSize') || '10', 10);
@@ -14,10 +37,10 @@ export async function onRequestGet(context) {
 
   try {
     const { results } = await env.NAV_DB.prepare(`
-        SELECT c.id, c.catelog, c.sort_order, COUNT(s.id) AS site_count
+        SELECT c.id, c.catelog, c.sort_order, c.parent_id, COUNT(s.id) AS site_count
         FROM category c
         LEFT JOIN sites s ON c.id = s.catelog_id
-        GROUP BY c.id, c.catelog, c.sort_order
+        GROUP BY c.id, c.catelog, c.sort_order, c.parent_id
         ORDER BY c.sort_order ASC, c.create_time DESC
         LIMIT ? OFFSET ?
       `).bind(pageSize, offset).all();

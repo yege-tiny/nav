@@ -10,7 +10,7 @@ export async function onRequestGet(context) {
 
   try {
     // Fetch categories
-    const categoriesPromise = env.NAV_DB.prepare('SELECT id, catelog, sort_order FROM category ORDER BY sort_order ASC').all();
+    const categoriesPromise = env.NAV_DB.prepare('SELECT id, catelog, sort_order, parent_id FROM category ORDER BY sort_order ASC').all();
     
     // Fetch sites
     const sitesPromise = env.NAV_DB.prepare('SELECT id, name, url, logo, desc, catelog_id, sort_order FROM sites ORDER BY sort_order ASC, create_time DESC').all();

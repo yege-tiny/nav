@@ -18,6 +18,83 @@ const categoryCurrentPageSpan = document.getElementById('categoryCurrentPage');
 const categoryTotalPagesSpan = document.getElementById('categoryTotalPages');
 const refreshCategoriesBtn = document.getElementById('refreshCategories');
 
+function showMessage(text, type = 'info') {
+  if (!messageDiv) return;
+  messageDiv.innerText = text;
+  messageDiv.style.display = 'block';
+  
+  if (type === 'success') {
+    messageDiv.style.backgroundColor = '#d4edda';
+    messageDiv.style.color = '#155724';
+    messageDiv.style.border = '1px solid #c3e6cb';
+  } else if (type === 'error') {
+    messageDiv.style.backgroundColor = '#f8d7da';
+    messageDiv.style.color = '#721c24';
+    messageDiv.style.border = '1px solid #f5c6cb';
+  } else {
+    messageDiv.style.backgroundColor = '#d1ecf1';
+    messageDiv.style.color = '#0c5460';
+    messageDiv.style.border = '1px solid #bee5eb';
+  }
+
+  setTimeout(() => {
+    messageDiv.style.display = 'none';
+  }, 3000);
+}
+
+function showModalMessage(modalId, text, type = 'info') {
+  const messageBoxId = modalId.replace('Modal', 'Message');
+  const messageBox = document.getElementById(messageBoxId);
+  
+  if (!messageBox) {
+      console.warn('Message box not found for modal:', modalId);
+      showMessage(text, type); // Fallback
+      return;
+  }
+
+  messageBox.innerText = text;
+  messageBox.style.visibility = 'visible';
+  messageBox.style.display = 'block';
+  messageBox.style.padding = '10px';
+  messageBox.style.marginBottom = '15px';
+  messageBox.style.borderRadius = '4px';
+  messageBox.style.fontSize = '14px';
+
+  if (type === 'success') {
+    messageBox.style.backgroundColor = '#d4edda';
+    messageBox.style.color = '#155724';
+    messageBox.style.border = '1px solid #c3e6cb';
+  } else if (type === 'error') {
+    messageBox.style.backgroundColor = '#f8d7da';
+    messageBox.style.color = '#721c24';
+    messageBox.style.border = '1px solid #f5c6cb';
+  } else {
+    messageBox.style.backgroundColor = '#d1ecf1';
+    messageBox.style.color = '#0c5460';
+    messageBox.style.border = '1px solid #bee5eb';
+  }
+
+  setTimeout(() => {
+    messageBox.style.visibility = 'hidden';
+    messageBox.style.display = 'none';
+  }, 3000);
+}
+
+function updatePaginationButtons() {
+  if (prevPageBtn) prevPageBtn.disabled = currentPage <= 1;
+  if (nextPageBtn) nextPageBtn.disabled = currentPage >= Math.ceil(totalItems / pageSize);
+}
+
+function updateCategoryPaginationButtons() {
+  if (categoryPrevPageBtn) categoryPrevPageBtn.disabled = categoryCurrentPage <= 1;
+  if (categoryNextPageBtn) categoryNextPageBtn.disabled = categoryCurrentPage >= Math.ceil(categoryTotalItems / categoryPageSize);
+}
+
+function updatePendingPaginationButtons() {
+  if (pendingPrevPageBtn) pendingPrevPageBtn.disabled = pendingCurrentPage <= 1;
+  if (pendingNextPageBtn) pendingNextPageBtn.disabled = pendingCurrentPage >= Math.ceil(pendingTotalItems / pendingPageSize);
+}
+
 var escapeHTML = function (value) {
   if (value === null || value === undefined) {
     return '';
@@ -46,6 +123,306 @@ const importBtn = document.getElementById('importBtn');
 const importFile = document.getElementById('importFile');
 const exportBtn = document.getElementById('exportBtn');
 
+// 导入按钮点击事件
+if (importBtn) {
+  importBtn.addEventListener('click', () => {
+    if (importFile) importFile.click();
+  });
+}
+
+// 文件选择事件
+if (importFile) {
+  importFile.addEventListener('change', function (e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const fileName = file.name.toLowerCase();
+    const reader = new FileReader();
+
+    if (fileName.endsWith('.html') || fileName.endsWith('.htm')) {
+      // Chrome 书签 HTML 格式导入
+      reader.onload = function (event) {
+        try {
+          const htmlContent = event.target.result;
+          const result = parseChromeBookmarks(htmlContent);
+
+          if (result.sites.length === 0) {
+            showMessage('未在文件中找到有效书签', 'error');
+            return;
+          }
+
+          // 显示预览并确认导入
+          showImportPreview(result);
+        } catch (error) {
+          console.error(error);
+          showMessage('书签解析失败: ' + error.message, 'error');
+        }
+      };
+      reader.readAsText(file, 'UTF-8');
+    } else if (fileName.endsWith('.json')) {
+      // 系统导出的 JSON 格式导入
+      reader.onload = function (event) {
+        try {
+          const data = JSON.parse(event.target.result);
+
+          // 简单确认后直接导入
+          if (confirm('确定要导入这个 JSON 文件中的书签吗？')) {
+            performImport(data);
+          }
+        } catch (error) {
+          showMessage('JSON 文件解析失败: ' + error.message, 'error');
+        }
+      };
+      reader.readAsText(file, 'UTF-8');
+    } else {
+      showMessage('不支持的文件格式。请选择 .html 或 .json 文件。', 'error');
+    }
+
+    // Reset file input to allow re-selecting the same file
+    e.target.value = '';
+  });
+}
+
+// 导出按钮事件
+if (exportBtn) {
+  exportBtn.addEventListener('click', () => {
+    fetch('/api/config/export')
+      .then(res => res.blob())
+      .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'config.json';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }).catch(err => {
+        showMessage('网络错误', 'error');
+      });
+  });
+}
+
+// 解析 Chrome 书签 HTML - 支持多级分类
+function parseChromeBookmarks(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  
+  let categories = [];
+  // Map unique path -> category object to reuse categories within the import file
+  let pathMap = new Map();
+  let sites = [];
+  let tempIdCounter = 1;
+
+  // Helper to create or get category
+  function getOrCreateCategory(name, parentTempId) {
+    // Generate a key based on parentId + name to distinguish 'Dev > Tools' from 'Work > Tools'
+    const key = `${parentTempId || 0}-${name}`;
+    
+    if (pathMap.has(key)) {
+        return pathMap.get(key).id;
+    }
+
+    const newId = tempIdCounter++;
+    const cat = {
+        id: newId,
+        catelog: name,
+        parent_id: parentTempId || 0, // 0 for root
+        sort_order: 9999
+    };
+    categories.push(cat);
+    pathMap.set(key, cat);
+    return newId;
+  }
+
+  function traverse(node, parentId) {
+    // parentId is the temp ID of the folder we are currently processing. 0 for root.
+    
+    for (let i = 0; i < node.childNodes.length; i++) {
+        const child = node.childNodes[i];
+        
+        // Typical structure: <DT><H3>Folder</H3><DL>...</DL></DT>
+        // Or <DT><A>Link</A></DT>
+        if (child.tagName === 'DT') {
+            const h3 = child.querySelector(':scope > h3'); // Direct child check safer
+            const a = child.querySelector(':scope > a');
+            const dl = child.querySelector(':scope > dl');
+
+            if (h3) {
+                const folderName = h3.textContent.trim();
+                let currentFolderId = parentId;
+
+                // Handle Root Folders - Map them to 0 (Root) or create categories?
+                // If parentId is 0, these are top-level.
+                // "书签栏" often contains the actual bookmark tree.
+                if (parentId === 0 && ['书签栏', 'Bookmarks Bar', '收藏夹', '其他书签', 'Other Bookmarks'].includes(folderName)) {
+                     // Treat as root, don't create category, items inside go to root (or parentId 0)
+                     currentFolderId = 0;
+                } else {
+                     currentFolderId = getOrCreateCategory(folderName, parentId);
+                }
+                
+                // If DL is inside DT
+                if (dl) {
+                    traverse(dl, currentFolderId);
+                } else {
+                    // Sometimes DL is a sibling of DT?
+                    // But in that case, the loop over `node` (the parent DL) will hit it next.
+                    // But we need to know it belongs to *this* H3.
+                    // Standard Netscape bookmarks: <DT><H3>...</H3><DL>...</DL> is inside DT?
+                    // Let's check next sibling if dl is missing?
+                    // Actually, DOMParser might handle valid HTML.
+                    // If the format is <DT><H3>...</H3></DT><DL>...</DL> (sibling),
+                    // then `dl` won't be found here.
+                    // We'll handle DL in the main loop if it's a sibling.
+                }
+            } else if (a) {
+                const url = a.getAttribute('href');
+                if (url) {
+                    sites.push({
+                        name: a.textContent.trim() || '未命名',
+                        url: url,
+                        logo: a.getAttribute('icon') || '',
+                        desc: '',
+                        catelog_id: parentId,
+                        sort_order: 9999
+                    });
+                }
+            }
+        } else if (child.tagName === 'DL') {
+            // Found a DL list. If it's a sibling of a DT, we need to know which folder it belongs to.
+            // But traverse() is called with `parentId`.
+            // In a flat list of DTs and DLs, a DL usually follows a DT.
+            // But tracking "current folder" in a loop is tricky if structure varies.
+            // Assumption: The recursive `traverse(dl, currentFolderId)` above handles nested DLs.
+            // If we find a DL here, it might be a sibling DL.
+            // In many exports, <DT><H3>F</H3><DL>...</DL></DT> is the norm.
+            // If we encounter a stray DL, we process it with current context (parentId).
+            traverse(child, parentId);
+        }
+    }
+  }
+
+  // Start with body
+  // Some exports have <DL> at root.
+  const rootDl = doc.querySelector('dl');
+  if (rootDl) {
+      traverse(rootDl, 0);
+  } else {
+      traverse(doc.body, 0);
+  }
+
+  return { category: categories, sites: sites };
+}
+
+// 显示导入预览
+function showImportPreview(result) {
+  const previewModal = document.createElement('div');
+  previewModal.className = 'modal';
+  previewModal.style.display = 'block';
+
+  // Build tree for preview
+  const catMap = new Map();
+  result.category.forEach(c => catMap.set(c.id, { ...c, count: 0, children: [] }));
+  
+  // Count sites per category
+  result.sites.forEach(s => {
+      if (s.catelog_id === 0) {
+           // Root items
+      } else if (catMap.has(s.catelog_id)) {
+          catMap.get(s.catelog_id).count++;
+      }
+  });
+
+  // Build hierarchy text
+  let html = '';
+  function buildPreviewHtml(parentId, depth) {
+      let items = '';
+      const prefix = '&nbsp;&nbsp;'.repeat(depth * 2) + (depth > 0 ? '└─ ' : '');
+      
+      // Find children
+      const children = result.category.filter(c => c.parent_id === parentId);
+      children.forEach(c => {
+          const stats = catMap.get(c.id);
+          items += `<li>${prefix}${escapeHTML(c.catelog)} <span class="text-gray-500 text-xs">(${stats.count} 书签)</span></li>`;
+          items += buildPreviewHtml(c.id, depth + 1);
+      });
+      return items;
+  }
+  
+  const treeHtml = buildPreviewHtml(0, 0);
+  const rootCount = result.sites.filter(s => s.catelog_id === 0).length;
+  const rootHtml = rootCount > 0 ? `<li>(根目录) <span class="text-gray-500 text-xs">(${rootCount} 书签)</span></li>` : '';
+
+  previewModal.innerHTML = `
+    <div class="modal-content">
+      <span class="modal-close" id="closePreviewModal">×</span>
+      <h2>导入预览</h2>
+      <div style="margin: 20px 0;">
+        <p><strong>总共发现 ${result.sites.length} 个书签，${result.category.length} 个分类</strong></p>
+        <div style="margin: 10px 0; padding: 10px; border: 1px solid #eee; max-height: 300px; overflow-y: auto; background: #f9f9f9;">
+           <ul class="text-sm">
+             ${rootHtml}
+             ${treeHtml}
+           </ul>
+        </div>
+        <p style="margin-top: 15px; color: #6c757d; font-size: 0.9rem;">
+          注意: 将按照层级结构导入。若分类已存在（名称和父级匹配），将合并。
+        </p>
+      </div>
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button id="cancelImport" class="button-tertiary" style="background-color: #f3f4f6; color: #4b5563;">取消</button>
+        <button id="confirmImport" class="button-primary" style="background-color: #4f46e5; color: white;">确认导入</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(previewModal);
+
+  document.getElementById('closePreviewModal').addEventListener('click', () => {
+    document.body.removeChild(previewModal);
+  });
+
+  document.getElementById('cancelImport').addEventListener('click', () => {
+    document.body.removeChild(previewModal);
+  });
+
+  document.getElementById('confirmImport').addEventListener('click', () => {
+    document.body.removeChild(previewModal);
+    performImport(result);
+  });
+  
+   previewModal.addEventListener('click', (e) => {
+    if (e.target === previewModal) {
+      document.body.removeChild(previewModal);
+    }
+  });
+}
+
+// 执行导入
+function performImport(dataToImport) {
+  showMessage('正在导入,请稍候...', 'info');
+
+  fetch('/api/config/import', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(dataToImport)
+  }).then(res => res.json())
+    .then(data => {
+      if (data.code === 201 || data.code === 200) {
+        showMessage(data.message, 'success');
+        fetchConfigs();
+        fetchCategories(); // Refresh categories
+      } else {
+        showMessage(data.message || '导入失败', 'error');
+      }
+    }).catch(err => {
+      showMessage('网络错误: ' + err.message, 'error');
+    });
+}
+
 const tabButtons = document.querySelectorAll('.tab-button');
 const tabContents = document.querySelectorAll('.tab-content');
 
@@ -62,6 +439,8 @@ tabButtons.forEach(button => {
     })
     if (tab === 'categories') {
       fetchCategories();
+    } else if (tab === 'pending') {
+      fetchPendingConfigs();
     }
   });
 });
@@ -84,6 +463,19 @@ let allConfigs = [];
 let currentSearchKeyword = '';
 let currentCategoryFilter = '';
 
+// Initialize Search
+if (searchInput) {
+  let debounceTimer;
+  searchInput.addEventListener('input', (e) => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      currentSearchKeyword = e.target.value.trim();
+      currentPage = 1;
+      fetchConfigs(currentPage, currentSearchKeyword, currentCategoryFilter);
+    }, 300);
+  });
+}
+
 // Initialize Page Size
 if (pageSizeSelect) {
   pageSizeSelect.value = pageSize; // Set default in UI
@@ -96,19 +488,13 @@ if (pageSizeSelect) {
 
 // Initialize Category Filter
 if (categoryFilter) {
-  // Populate categories will happen in fetchCategoriesForFilter or similar
-  // Re-use the existing logic or add a new fetch
-  fetch('/api/categories?pageSize=999')
+  fetch('/api/categories?pageSize=10000')
     .then(res => res.json())
     .then(data => {
       if (data.code === 200 && data.data) {
-        // Keep the default "All" option
-        data.data.forEach(cat => {
-          const option = document.createElement('option');
-          option.value = cat.catelog; // Use name for filtering as API expects name or ID? API index.js uses name if provided as 'catalog' param
-          option.textContent = cat.catelog;
-          categoryFilter.appendChild(option);
-        });
+        categoriesData = data.data;
+        categoriesTree = buildCategoryTree(categoriesData);
+        createCascadingDropdown('categoryFilterWrapper', 'categoryFilter', categoriesTree);
       }
     });
 
@@ -125,7 +511,7 @@ let pendingTotalItems = 0;
 let allPendingConfigs = [];
 
 let categoryCurrentPage = 1;
-let categoryPageSize = 20;
+let categoryPageSize = 10000;
 let categoryTotalItems = 0;
 let categoriesData = [];
 
@@ -136,6 +522,61 @@ if (categoryPageSizeSelect) {
     categoryPageSize = parseInt(categoryPageSizeSelect.value);
     categoryCurrentPage = 1;
     fetchCategories(categoryCurrentPage);
+  });
+}
+
+// Pagination Event Listeners
+if (prevPageBtn) {
+  prevPageBtn.addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      fetchConfigs(currentPage, currentSearchKeyword, currentCategoryFilter);
+    }
+  });
+}
+
+if (nextPageBtn) {
+  nextPageBtn.addEventListener('click', () => {
+    if (currentPage < Math.ceil(totalItems / pageSize)) {
+      currentPage++;
+      fetchConfigs(currentPage, currentSearchKeyword, currentCategoryFilter);
+    }
+  });
+}
+
+if (categoryPrevPageBtn) {
+  categoryPrevPageBtn.addEventListener('click', () => {
+    if (categoryCurrentPage > 1) {
+      categoryCurrentPage--;
+      fetchCategories(categoryCurrentPage);
+    }
+  });
+}
+
+if (categoryNextPageBtn) {
+  categoryNextPageBtn.addEventListener('click', () => {
+    if (categoryCurrentPage < Math.ceil(categoryTotalItems / categoryPageSize)) {
+      categoryCurrentPage++;
+      fetchCategories(categoryCurrentPage);
+    }
+  });
+}
+
+if (pendingPrevPageBtn) {
+  pendingPrevPageBtn.addEventListener('click', () => {
+    if (pendingCurrentPage > 1) {
+      pendingCurrentPage--;
+      fetchPendingConfigs(pendingCurrentPage);
+    }
+  });
+}
+
+if (pendingNextPageBtn) {
+  pendingNextPageBtn.addEventListener('click', () => {
+    if (pendingCurrentPage < Math.ceil(pendingTotalItems / pendingPageSize)) {
+      pendingCurrentPage++;
+      fetchPendingConfigs(pendingCurrentPage);
+    }
   });
 }
 
@@ -189,6 +630,189 @@ if (editBookmarkForm) {
 
 
 
+// Helper: Build Category Tree
+function buildCategoryTree(categories) {
+    const map = new Map();
+    const roots = [];
+    
+    // Initialize map
+    categories.forEach(cat => {
+        map.set(cat.id, { ...cat, children: [] });
+    });
+    
+    // Build tree
+    categories.forEach(cat => {
+        if (cat.parent_id && map.has(cat.parent_id)) {
+            map.get(cat.parent_id).children.push(map.get(cat.id));
+        } else {
+            roots.push(map.get(cat.id));
+        }
+    });
+    
+    // Sort
+    const sortFn = (a, b) => {
+        const orderA = a.sort_order ?? 9999;
+        const orderB = b.sort_order ?? 9999;
+        return orderA - orderB || a.id - b.id;
+    };
+    
+    const sortRecursive = (nodes) => {
+        nodes.sort(sortFn);
+        nodes.forEach(node => {
+            if (node.children.length > 0) sortRecursive(node.children);
+        });
+    };
+    
+    sortRecursive(roots);
+    return roots;
+}
+
+// Helper: Create Cascading Dropdown (Flat with Indentation)
+function createCascadingDropdown(containerId, inputId, categoriesTree, initialValue = null, excludeId = null) {
+    const container = document.getElementById(containerId);
+    const input = document.getElementById(inputId);
+    if (!container || !input) return;
+    
+    // Determine context (Filter vs Parent Selection)
+    const isFilter = inputId === 'categoryFilter';
+
+    // Find initial label
+    let initialLabel = '请选择分类';
+    const findLabel = (nodes, id) => {
+        for (const node of nodes) {
+            if (String(node.id) === String(id)) return node.catelog;
+            if (node.children) {
+                const found = findLabel(node.children, id);
+                if (found) return found;
+            }
+        }
+        return null;
+    };
+    
+    if (initialValue && initialValue != '0') {
+        // If isFilter, initialValue is likely a name, not ID.
+        if (isFilter) {
+             initialLabel = initialValue;
+             input.value = initialValue;
+        } else {
+            const label = findLabel(categoriesTree, initialValue);
+            if (label) initialLabel = label;
+            input.value = initialValue;
+        }
+    } else if (initialValue == '0' && !isFilter) {
+        initialLabel = '无 (顶级分类)';
+        input.value = '0';
+    } else if (isFilter && !initialValue) {
+        initialLabel = '所有分类';
+        input.value = '';
+    } else {
+        input.value = '';
+    }
+
+    container.innerHTML = '';
+    
+    // Render Trigger
+    const trigger = document.createElement('div');
+    trigger.className = 'custom-dropdown-trigger';
+    trigger.textContent = initialLabel;
+    container.appendChild(trigger);
+    
+    // Render Menu
+    const menu = document.createElement('div');
+    menu.className = 'custom-dropdown-menu';
+    
+    // Optional "None" option for parent selection
+    if (inputId.toLowerCase().includes('parent')) {
+        const rootItem = document.createElement('div');
+        rootItem.className = 'custom-dropdown-item';
+        rootItem.innerHTML = '<span class="font-medium text-gray-900">无 (顶级分类)</span>';
+        rootItem.addEventListener('click', (e) => {
+            e.stopPropagation();
+            input.value = '0';
+            trigger.textContent = '无 (顶级分类)';
+            menu.classList.remove('show');
+        });
+        menu.appendChild(rootItem);
+    }
+    
+    // "All Categories" for Filter
+    if (isFilter) {
+        const rootItem = document.createElement('div');
+        rootItem.className = 'custom-dropdown-item';
+        rootItem.innerHTML = '<span class="font-medium text-gray-900">所有分类</span>';
+        rootItem.addEventListener('click', (e) => {
+            e.stopPropagation();
+            input.value = '';
+            trigger.textContent = '所有分类';
+            menu.classList.remove('show');
+            input.dispatchEvent(new Event('change'));
+        });
+        menu.appendChild(rootItem);
+    }
+
+    // Flatten logic
+    const renderItems = (nodes, depth = 0) => {
+        nodes.forEach(node => {
+            if (excludeId && node.id == excludeId) return; 
+            
+            const item = document.createElement('div');
+            item.className = 'custom-dropdown-item';
+            
+            // Indentation using padding/margin or invisible chars
+            // Using padding-left based on depth
+            item.style.paddingLeft = `${15 + depth * 20}px`;
+            
+            let prefix = '';
+            if (depth > 0) {
+                prefix = '└─ ';
+            }
+
+            const textSpan = document.createElement('span');
+            textSpan.textContent = prefix + node.catelog;
+            item.appendChild(textSpan);
+            
+            // Click Event (Select)
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (isFilter) {
+                    input.value = node.catelog; // Filter uses Name
+                } else {
+                    input.value = node.id; // Others use ID
+                }
+                trigger.textContent = node.catelog;
+                menu.classList.remove('show');
+                input.dispatchEvent(new Event('change'));
+            });
+            
+            menu.appendChild(item);
+            
+            if (node.children && node.children.length > 0) {
+                renderItems(node.children, depth + 1);
+            }
+        });
+    };
+    
+    renderItems(categoriesTree);
+    container.appendChild(menu);
+    
+    // Toggle Menu
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Close others
+        document.querySelectorAll('.custom-dropdown-menu.show').forEach(m => {
+            if (m !== menu) m.classList.remove('show');
+        });
+        menu.classList.toggle('show');
+    });
+    
+    // Close on click outside
+    document.addEventListener('click', (e) => {
+        if (!container.contains(e.target)) {
+            menu.classList.remove('show');
+        }
+    });
+}
+
 function fetchConfigs(page = currentPage, keyword = currentSearchKeyword, catalog = currentCategoryFilter) {
   let url = `/api/config?page=${page}&pageSize=${pageSize}`;
   const params = new URLSearchParams();
@@ -222,6 +846,86 @@ function fetchConfigs(page = currentPage, keyword = currentSearchKeyword, catalo
     }).catch(err => {
       showMessage('网络错误', 'error');
     })
+}
+
+function fetchPendingConfigs(page = pendingCurrentPage) {
+  if (!pendingTableBody) return;
+  pendingTableBody.innerHTML = '<tr><td colspan="7" class="text-center py-10">加载中...</td></tr>';
+  fetch(`/api/pending?page=${page}&pageSize=${pendingPageSize}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.code === 200) {
+        pendingTotalItems = data.total;
+        pendingCurrentPage = data.page;
+        pendingTotalPagesSpan.innerText = Math.ceil(pendingTotalItems / pendingPageSize);
+        pendingCurrentPageSpan.innerText = pendingCurrentPage;
+        allPendingConfigs = data.data;
+        renderPendingConfigs(allPendingConfigs);
+        updatePendingPaginationButtons();
+      } else {
+        showMessage(data.message, 'error');
+      }
+    }).catch(err => {
+      showMessage('网络错误', 'error');
+    });
+}
+
+function renderPendingConfigs(configs) {
+  if (!pendingTableBody) return;
+  pendingTableBody.innerHTML = '';
+  if (configs.length === 0) {
+    pendingTableBody.innerHTML = '<tr><td colspan="7" class="text-center py-10">暂无待审核数据</td></tr>';
+    return;
+  }
+  configs.forEach(config => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="p-3 border-b">${config.id}</td>
+      <td class="p-3 border-b">${escapeHTML(config.name)}</td>
+      <td class="p-3 border-b truncate max-w-[200px]" title="${config.url}">${escapeHTML(config.url)}</td>
+      <td class="p-3 border-b">${config.logo ? `<img src="${escapeHTML(normalizeUrl(config.logo))}" class="w-8 h-8 rounded">` : '无'}</td>
+      <td class="p-3 border-b max-w-[200px] truncate" title="${config.desc}">${escapeHTML(config.desc)}</td>
+      <td class="p-3 border-b">${escapeHTML(config.catelog)}</td>
+      <td class="p-3 border-b">
+        <div class="flex gap-2">
+          <button class="approve-btn bg-green-100 text-green-600 hover:bg-green-200 px-2 py-1 rounded text-xs" data-id="${config.id}">通过</button>
+          <button class="reject-btn bg-red-100 text-red-600 hover:bg-red-200 px-2 py-1 rounded text-xs" data-id="${config.id}">拒绝</button>
+        </div>
+      </td>
+    `;
+    pendingTableBody.appendChild(tr);
+  });
+  bindPendingActionEvents();
+}
+
+function bindPendingActionEvents() {
+  document.querySelectorAll('.approve-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      handlePendingAction(this.dataset.id, 'approve');
+    });
+  });
+  document.querySelectorAll('.reject-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      handlePendingAction(this.dataset.id, 'reject');
+    });
+  });
+}
+
+function handlePendingAction(id, action) {
+  const method = action === 'approve' ? 'POST' : 'DELETE';
+  const url = `/api/pending/${id}`;
+  
+  fetch(url, { method: method })
+    .then(res => res.json())
+    .then(data => {
+      if (data.code === 200 || data.code === 201) {
+        showMessage(action === 'approve' ? '审批通过' : '已拒绝', 'success');
+        fetchPendingConfigs();
+        if (action === 'approve') fetchConfigs();
+      } else {
+        showMessage(data.message, 'error');
+      }
+    }).catch(() => showMessage('操作失败', 'error'));
 }
 
 function renderConfig(configs) {
@@ -322,6 +1026,53 @@ function bindActionEvents() {
   })
 }
 
+function handleEdit(id) {
+  const config = allConfigs.find(c => c.id == id);
+  if (!config) {
+    showMessage('找不到书签数据', 'error');
+    return;
+  }
+  
+  document.getElementById('editBookmarkId').value = config.id;
+  document.getElementById('editBookmarkName').value = config.name;
+  document.getElementById('editBookmarkUrl').value = config.url;
+  document.getElementById('editBookmarkLogo').value = config.logo;
+  document.getElementById('editBookmarkDesc').value = config.desc;
+  document.getElementById('editBookmarkSortOrder').value = config.sort_order;
+  document.getElementById('editBookmarkIsPrivate').checked = !!config.is_private;
+  
+  // Ensure we have categories tree for the dropdown
+  if (categoriesTree.length === 0) {
+      // If tree is empty (e.g. direct load), try to build it from available data or fetch
+      // But fetchConfigs usually runs first.
+      // Fallback: fetch again if needed, but for now assuming data exists or handle gracefully
+  }
+  
+  createCascadingDropdown('editBookmarkCatelogWrapper', 'editBookmarkCatelog', categoriesTree, config.catelog_id);
+  
+  const editModal = document.getElementById('editBookmarkModal');
+  if (editModal) editModal.style.display = 'block';
+}
+
+function handleDelete(id) {
+  if (!confirm('确定删除该书签吗？')) return;
+  
+  fetch(`/api/config/${id}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' }
+  }).then(res => res.json())
+    .then(data => {
+      if (data.code === 200) {
+        showMessage('删除成功', 'success');
+        fetchConfigs();
+      } else {
+        showMessage(data.message || '删除失败', 'error');
+      }
+    }).catch(err => {
+      showMessage('网络错误', 'error');
+    });
+}
+
 function setupDragAndDrop() {
   const cards = document.querySelectorAll('#configGrid .site-card');
   let draggedItem = null;
@@ -415,6 +1166,9 @@ function saveSortOrder() {
   }
 }
 
+let categoriesTree = [];
+let currentViewParentId = null;
+
 function fetchCategories(page = categoryCurrentPage) {
   if (!categoryGrid) {
     return;
@@ -429,23 +1183,83 @@ function fetchCategories(page = categoryCurrentPage) {
         categoryTotalPagesSpan.innerText = Math.ceil(categoryTotalItems / categoryPageSize);
         categoryCurrentPageSpan.innerText = categoryCurrentPage;
         categoriesData = data.data || [];
-        renderCategoryCards(categoriesData);
+        
+        // Build Tree
+        categoriesTree = buildCategoryTree(categoriesData);
+        
+        renderCategoryView(currentViewParentId);
         updateCategoryPaginationButtons();
       } else {
         showMessage(data.message || '加载分类失败', 'error');
         categoryGrid.innerHTML = '<div class="col-span-full text-center py-10 text-red-500">加载失败</div>';
       }
-    }).catch(() => {
-      showMessage('网络错误', 'error');
+    }).catch((err) => {
+      console.error('Fetch Categories Error:', err);
+      showMessage('网络错误: ' + err.message, 'error');
       categoryGrid.innerHTML = '<div class="col-span-full text-center py-10 text-red-500">加载失败</div>';
     });
+}
+
+function renderCategoryView(parentId) {
+    currentViewParentId = parentId;
+    updateCategoryBreadcrumb(parentId);
+    
+    let nodesToRender = [];
+    if (!parentId || parentId == '0') {
+        nodesToRender = categoriesTree;
+    } else {
+        // Find the node in the tree
+        const findNode = (nodes, id) => {
+            for(const node of nodes) {
+                if(node.id == id) return node;
+                if(node.children) {
+                    const found = findNode(node.children, id);
+                    if(found) return found;
+                }
+            }
+            return null;
+        };
+        const parentNode = findNode(categoriesTree, parentId);
+        if(parentNode && parentNode.children) {
+            nodesToRender = parentNode.children;
+        } else {
+            nodesToRender = [];
+        }
+    }
+    renderCategoryCards(nodesToRender);
+}
+
+function updateCategoryBreadcrumb(parentId) {
+    const backBtn = document.getElementById('categoryBackBtn');
+    const breadcrumb = document.getElementById('categoryBreadcrumb');
+    
+    if(!parentId || parentId == '0') {
+        if(backBtn) backBtn.classList.add('hidden');
+        if(breadcrumb) breadcrumb.textContent = '顶级分类';
+    } else {
+        if(backBtn) backBtn.classList.remove('hidden');
+        const cat = categoriesData.find(c => c.id == parentId);
+        if(breadcrumb) breadcrumb.textContent = cat ? cat.catelog : '未知分类';
+        
+        if (backBtn) {
+            // Unbind old events by replacing the element or just re-assigning onclick
+            backBtn.onclick = () => {
+                 const currentCat = categoriesData.find(c => c.id == parentId);
+                 if(currentCat && currentCat.parent_id && currentCat.parent_id != '0') {
+                     renderCategoryView(currentCat.parent_id);
+                 } else {
+                     renderCategoryView(null);
+                 }
+            };
+        }
+    }
 }
 
 function renderCategoryCards(categories) {
   if (!categoryGrid) return;
   categoryGrid.innerHTML = '';
   if (!categories || categories.length === 0) {
-    categoryGrid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-10">暂无分类数据</div>';
+    categoryGrid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-10">没有子分类数据</div>';
     return;
   }
 
@@ -454,6 +1268,7 @@ function renderCategoryCards(categories) {
     const safeName = escapeHTML(item.catelog);
     const siteCount = item.site_count || 0;
     const sortValue = item.sort_order === null || item.sort_order === 9999 ? '默认' : item.sort_order;
+    const subCount = item.children ? item.children.length : 0;
 
     card.className = 'site-card group bg-white border border-primary-100/60 rounded-xl shadow-sm overflow-hidden relative cursor-move';
     card.draggable = true;
@@ -467,7 +1282,7 @@ function renderCategoryCards(categories) {
                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
              </svg>
          </button>
-         <button class="category-del-btn p-1.5 ${siteCount > 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-red-100 text-red-600 hover:bg-red-200'} rounded-full transition-colors" title="${siteCount > 0 ? '包含书签的分类无法删除' : '删除'}" data-category-id="${item.id}" ${siteCount > 0 ? 'disabled' : ''}>
+         <button class="category-del-btn p-1.5 bg-red-100 text-red-600 hover:bg-red-200 rounded-full transition-colors" title="删除" data-category-id="${item.id}" data-site-count="${siteCount}" data-sub-count="${subCount}">
              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
              </svg>
@@ -481,18 +1296,30 @@ function renderCategoryCards(categories) {
         </div>
         
         <div class="flex items-center text-sm text-gray-500 mt-4 space-x-4">
-            <div class="flex items-center">
+            <div class="flex items-center" title="直接包含的书签数">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                 </svg>
-                <span>${siteCount} 个书签</span>
+                <span>${siteCount}</span>
+            </div>
+            <div class="flex items-center" title="子分类数量">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                <span>${subCount} 子分类</span>
             </div>
             <div class="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
-                </svg>
                 <span>排序: ${sortValue}</span>
             </div>
+        </div>
+        
+        <div class="mt-4 pt-3 border-t border-gray-100 flex justify-end">
+            <button class="category-subs-btn text-xs flex items-center px-2 py-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 transition-colors" data-category-id="${item.id}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                管理子分类
+            </button>
         </div>
       </div>
     `;
@@ -514,6 +1341,9 @@ function bindCategoryEvents() {
         document.getElementById('editCategoryName').value = category.catelog;
         const sortOrder = category.sort_order;
         document.getElementById('editCategorySortOrder').value = (sortOrder === null || sortOrder === 9999) ? '' : sortOrder;
+        
+        createCascadingDropdown('editCategoryParentWrapper', 'editCategoryParent', categoriesTree, category.parent_id || '0', category.id);
+
         document.getElementById('editCategoryModal').style.display = 'block';
       } else {
         showMessage('找不到分类数据', 'error');
@@ -524,35 +1354,50 @@ function bindCategoryEvents() {
   document.querySelectorAll('.category-del-btn').forEach(btn => {
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
-      if (this.disabled) {
-        return;
-      }
+      // Remove disabled check since we removed the attribute
       const category_id = this.getAttribute('data-category-id');
-      if (!category_id) {
-        return;
+      const siteCount = parseInt(this.getAttribute('data-site-count') || '0');
+      const subCount = parseInt(this.getAttribute('data-sub-count') || '0');
+      
+      if (siteCount > 0) {
+          showMessage(`无法删除：该分类包含 ${siteCount} 个书签`, 'error');
+          return;
       }
-      if (!confirm('确定删除该分类吗？')) {
-        return;
+      if (subCount > 0) {
+          showMessage(`无法删除：该分类包含 ${subCount} 个子分类`, 'error');
+          return;
       }
-      fetch('/api/categories/' + encodeURIComponent(category_id), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ reset: true })
-      }).then(res => res.json())
-        .then(data => {
-          if (data.code === 200) {
-            showMessage('已删除分类', 'success');
-            fetchCategories();
-          } else {
-            showMessage(data.message || '删除失败', 'error');
-          }
-        }).catch(() => {
-          showMessage('网络错误', 'error');
-        });
+      
+      if (!category_id) return;
+      if (!confirm('确定删除该分类吗？')) return;
+      
+      deleteCategory(category_id);
     });
   });
+  
+  document.querySelectorAll('.category-subs-btn').forEach(btn => {
+      btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          const categoryId = this.getAttribute('data-category-id');
+          renderCategoryView(categoryId);
+      });
+  });
+}
+
+function deleteCategory(id, isSub = false) {
+    fetch('/api/categories/' + encodeURIComponent(id), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reset: true })
+    }).then(res => res.json()).then(data => {
+        if (data.code === 200) {
+            showMessage('删除成功', 'success');
+            // Refresh
+            fetchCategories();
+        } else {
+            showMessage(data.message || '删除失败', 'error');
+        }
+    });
 }
 
 function setupCategoryDragAndDrop() {
@@ -598,7 +1443,6 @@ function setupCategoryDragAndDrop() {
           this.before(draggedItem);
         }
 
-        // Save new order
         saveCategorySortOrder();
       }
     });
@@ -609,35 +1453,17 @@ function saveCategorySortOrder() {
   const cards = document.querySelectorAll('#categoryGrid .site-card');
   const updates = [];
 
-  // Calculate global start index based on current page
-  // Note: Categories usually are few, so paging might not be heavy used, but we support it.
-  const startIndex = (categoryCurrentPage - 1) * categoryPageSize;
-
   cards.forEach((card, index) => {
     const id = card.dataset.id;
-    // Set new sort order. Lower number = higher priority.
-    // We simply use index as sort order.
-    const newSortOrder = startIndex + index;
+    const newSortOrder = index + 1;
+    const category = categoriesData.find(c => c.id == id);
+    if (!category) return;
 
-    // We reuse the update endpoint.
-    // The backend expects full object or partial? api/categories/[id] PUT handles partial update
     updates.push(fetch(`/api/categories/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        // We only need to send what we change if the backend supports it.
-        // Checking backend code: functions/api/categories/[id].js
-        // It reads: const { catelog, sort_order } = await request.json();
-        // And it does `UPDATE category SET catelog = COALESCE(?, catelog), sort_order = COALESCE(?, sort_order) ...`
-        // Wait, I should verify the backend code. 
-        // Let's assume standard PUT behavior or check if I can see the backend code again.
-        // Previous context showed:
-        // `UPDATE category SET catelog = ?, sort_order = ? WHERE id = ?`
-        // Actually, I should check the backend code to be safe. 
-        // But based on `editCategoryForm` it sends `catelog` and `sort_order`.
-        // If I only send `sort_order`, `catelog` might be undefined/null.
-        // So I should send the name too.
-        catelog: categoriesData.find(c => c.id == id).catelog,
+        ...category,
         sort_order: newSortOrder
       })
     }));
@@ -646,490 +1472,42 @@ function saveCategorySortOrder() {
   if (updates.length > 0) {
     showMessage('正在保存分类排序...', 'info');
     Promise.all(updates)
-      .then(() => showMessage('分类排序已保存', 'success'))
-      .catch(err => showMessage('保存分类排序失败: ' + err.message, 'error'));
-  }
-}
-
-function handleEdit(id) {
-  fetch(`/api/config/${id}`, {
-    method: 'GET'
-  }).then(res => res.json())
-    .then(data => {
-      if (data.code === 200) {
-        const configToEdit = data.data
-        if (!configToEdit) {
-          showMessage('找不到要编辑的数据', 'error');
-          return;
-        }
-        const editBookmarkCatelogSelect = document.getElementById('editBookmarkCatelog');
-        fetchCategoriesForSelect(editBookmarkCatelogSelect).then(() => {
-          document.getElementById('editBookmarkId').value = configToEdit.id;
-          document.getElementById('editBookmarkName').value = configToEdit.name;
-          document.getElementById('editBookmarkUrl').value = configToEdit.url;
-          document.getElementById('editBookmarkLogo').value = configToEdit.logo;
-          document.getElementById('editBookmarkDesc').value = configToEdit.desc;
-          document.getElementById('editBookmarkCatelog').value = configToEdit.catelog_id;
-          document.getElementById('editBookmarkSortOrder').value = configToEdit.sort_order;
-          document.getElementById('editBookmarkIsPrivate').checked = !!configToEdit.is_private;
-          editBookmarkModal.style.display = 'block';
-        })
-
-      }
-    });
-}
-
-function handleDelete(id) {
-  if (!confirm('确认删除？')) return;
-  fetch(`/api/config/${id}`, {
-    method: 'DELETE'
-  }).then(res => res.json())
-    .then(data => {
-      if (data.code === 200) {
-        showMessage('删除成功', 'success');
-        fetchConfigs();
-      } else {
-        showMessage(data.message, 'error');
-      }
-    }).catch(err => {
-      showMessage('网络错误', 'error');
-    })
-}
-
-function showModalMessage(modalId, message, type) {
-  let containerId = '';
-  if (modalId === 'addBookmarkModal') containerId = 'addBookmarkMessage';
-  else if (modalId === 'editBookmarkModal') containerId = 'editBookmarkMessage';
-  else return; // Unknown modal
-
-  const container = document.getElementById(containerId);
-  if (container) {
-    container.textContent = message;
-    container.className = 'modal-message ' + type;
-    container.style.visibility = 'visible';
-
-    // Auto hide success/info messages after 3 seconds
-    if (type === 'success' || type === 'info') {
-      setTimeout(() => {
-        container.style.visibility = 'hidden';
-      }, 3000);
-    }
-  } else {
-    // Fallback to global message
-    showMessage(message, type);
-  }
-}
-
-function showMessage(message, type) {
-  messageDiv.innerText = message;
-  messageDiv.className = type;
-  messageDiv.style.display = 'block';
-  setTimeout(() => {
-    messageDiv.style.display = 'none';
-  }, 3000);
-}
-
-function updatePaginationButtons() {
-  prevPageBtn.disabled = currentPage === 1;
-  nextPageBtn.disabled = currentPage >= Math.ceil(totalItems / pageSize)
-}
-
-prevPageBtn.addEventListener('click', () => {
-  if (currentPage > 1) {
-    fetchConfigs(currentPage - 1, currentSearchKeyword, currentCategoryFilter);
-  }
-});
-
-nextPageBtn.addEventListener('click', () => {
-  if (currentPage < Math.ceil(totalItems / pageSize)) {
-    fetchConfigs(currentPage + 1, currentSearchKeyword, currentCategoryFilter);
-  }
-});
-
-
-importBtn.addEventListener('click', () => {
-  importFile.click();
-});
-
-importFile.addEventListener('change', function (e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const fileName = file.name.toLowerCase();
-  const reader = new FileReader();
-
-  if (fileName.endsWith('.html') || fileName.endsWith('.htm')) {
-    // Chrome 书签 HTML 格式导入
-    reader.onload = function (event) {
-      try {
-        const htmlContent = event.target.result;
-        const bookmarks = parseChromeBookmarks(htmlContent);
-
-        if (bookmarks.length === 0) {
-          showMessage('未在文件中找到有效书签', 'error');
-          return;
-        }
-
-        // 显示预览并确认导入
-        showImportPreview(bookmarks);
-      } catch (error) {
-        showMessage('书签解析失败: ' + error.message, 'error');
-      }
-    };
-    reader.readAsText(file, 'UTF-8');
-  } else if (fileName.endsWith('.json')) {
-    // 系统导出的 JSON 格式导入
-    reader.onload = function (event) {
-      try {
-        const data = JSON.parse(event.target.result);
-
-        // 简单确认后直接导入
-        if (confirm('确定要导入这个 JSON 文件中的书签吗？')) {
-          performImport(data);
-        }
-      } catch (error) {
-        showMessage('JSON 文件解析失败: ' + error.message, 'error');
-      }
-    };
-    reader.readAsText(file, 'UTF-8');
-  } else {
-    showMessage('不支持的文件格式。请选择 .html 或 .json 文件。', 'error');
-  }
-
-  // Reset file input to allow re-selecting the same file
-  e.target.value = '';
-})
-
-exportBtn.addEventListener('click', () => {
-  fetch('/api/config/export')
-    .then(res => res.blob())
-    .then(blob => {
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'config.json';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    }).catch(err => {
-      showMessage('网络错误', 'error');
-    })
-})
-
-// 搜索功能
-searchInput.addEventListener('input', () => {
-  currentSearchKeyword = searchInput.value.trim();
-  currentPage = 1;
-  fetchConfigs(currentPage, currentSearchKeyword, currentCategoryFilter);
-});
-
-// 解析 Chrome 书签 HTML
-function parseChromeBookmarks(html) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  const bookmarks = [];
-  let currentCategory = '未分类';
-
-  function traverseNode(node, category) {
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      // H3 标签表示文件夹(分类)
-      if (node.tagName === 'H3') {
-        currentCategory = node.textContent.trim() || '未分类';
-        // 跳过 "书签栏"、"其他书签" 等顶层文件夹
-        if (currentCategory === '书签栏' || currentCategory === 'Bookmarks Bar' ||
-          currentCategory === '其他书签' || currentCategory === 'Other Bookmarks') {
-          currentCategory = '未分类';
-        }
-      }
-
-      // A 标签表示书签
-      if (node.tagName === 'A') {
-        const url = node.getAttribute('HREF') || node.getAttribute('href');
-        const name = node.textContent.trim();
-
-        if (url && name) {
-          bookmarks.push({
-            name: name,
-            url: url,
-            logo: '',
-            desc: '',
-            catelog: category || currentCategory,
-            sort_order: 9999
+      .then(() => {
+          showMessage('分类排序已保存', 'success');
+          // Update local state
+          cards.forEach((card, index) => {
+              const id = card.dataset.id;
+              const cat = categoriesData.find(c => c.id == id);
+              if(cat) cat.sort_order = index + 1;
           });
-        }
-      }
-
-      // DL 标签表示列表容器,递归处理子节点
-      if (node.tagName === 'DL') {
-        const parent = node.previousElementSibling;
-        const folderCategory = (parent && parent.tagName === 'H3')
-          ? parent.textContent.trim()
-          : category;
-
-        Array.from(node.children).forEach(child => {
-          traverseNode(child, folderCategory);
-        });
-        return;
-      }
-    }
-
-    // 递归处理子节点
-    Array.from(node.children || []).forEach(child => {
-      traverseNode(child, category);
-    });
+      })
+      .catch(err => showMessage('保存排序失败: ' + err.message, 'error'));
   }
-
-  traverseNode(doc.body, currentCategory);
-  return bookmarks;
 }
 
-// 显示导入预览
-function showImportPreview(bookmarks) {
-  const previewModal = document.createElement('div');
-  previewModal.className = 'modal';
-  previewModal.style.display = 'block';
-
-  // 统计分类信息
-  const categoryStats = {};
-  bookmarks.forEach(b => {
-    categoryStats[b.catelog] = (categoryStats[b.catelog] || 0) + 1;
-  });
-
-  const categoryList = Object.entries(categoryStats)
-    .map(([cat, count]) => `<li>${escapeHTML(cat)}: ${count} 个书签</li>`)
-    .join('');
-
-  previewModal.innerHTML = `
-    <div class="modal-content">
-      <span class="modal-close" id="closePreviewModal">×</span>
-      <h2>导入预览</h2>
-      <div style="margin: 20px 0;">
-        <p><strong>总共发现 ${bookmarks.length} 个书签</strong></p>
-        <p><strong>包含以下分类:</strong></p>
-        <ul style="margin: 10px 0; padding-left: 20px;">
-          ${categoryList}
-        </ul>
-        <p style="margin-top: 15px; color: #6c757d; font-size: 0.9rem;">
-          注意: 导入的书签将使用默认排序值 9999
-        </p>
-      </div>
-      <div style="display: flex; gap: 10px; justify-content: flex-end;">
-        <button id="cancelImport" style="background-color: #6c757d;">取消</button>
-        <button id="confirmImport" style="background-color: #28a745;">确认导入</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(previewModal);
-
-  // 关闭预览
-  document.getElementById('closePreviewModal').addEventListener('click', () => {
-    document.body.removeChild(previewModal);
-  });
-
-  document.getElementById('cancelImport').addEventListener('click', () => {
-    document.body.removeChild(previewModal);
-  });
-
-  // 确认导入
-  document.getElementById('confirmImport').addEventListener('click', () => {
-    document.body.removeChild(previewModal);
-    performImport(bookmarks);
-  });
-
-  // 点击遮罩关闭
-  previewModal.addEventListener('click', (e) => {
-    if (e.target === previewModal) {
-      document.body.removeChild(previewModal);
-    }
-  });
-}
-
-// 执行导入
-function performImport(dataToImport) {
-  showMessage('正在导入,请稍候...', 'success');
-
-  fetch('/api/config/import', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(dataToImport)
-  }).then(res => res.json())
-    .then(data => {
-      if (data.code === 201) {
-        // The success message from the backend is more accurate now
-        showMessage(data.message, 'success');
-        fetchConfigs();
-      } else {
-        showMessage(data.message || '导入失败', 'error');
-      }
-    }).catch(err => {
-      showMessage('网络错误: ' + err.message, 'error');
+// Close Sub Modal
+const subCategoryModal = document.getElementById('subCategoryModal');
+const closeSubCategoryModal = document.getElementById('closeSubCategoryModal');
+if (closeSubCategoryModal && subCategoryModal) {
+    closeSubCategoryModal.addEventListener('click', () => subCategoryModal.style.display = 'none');
+    subCategoryModal.addEventListener('click', (e) => {
+        if (e.target === subCategoryModal) subCategoryModal.style.display = 'none';
     });
 }
 
-function fetchPendingConfigs(page = pendingCurrentPage) {
-  fetch(`/api/pending?page=${page}&pageSize=${pendingPageSize}`)
-    .then(res => res.json())
-    .then(data => {
-      if (data.code === 200) {
-        pendingTotalItems = data.total;
-        pendingCurrentPage = data.page;
-        pendingTotalPagesSpan.innerText = Math.ceil(pendingTotalItems / pendingPageSize);
-        pendingCurrentPageSpan.innerText = pendingCurrentPage;
-        allPendingConfigs = data.data;
-        renderPendingConfig(allPendingConfigs);
-        updatePendingPaginationButtons();
-      } else {
-        showMessage(data.message, 'error');
-      }
-    }).catch(err => {
-      showMessage('网络错误', 'error');
-    })
-}
-
-function renderPendingConfig(configs) {
-  pendingTableBody.innerHTML = '';
-  if (configs.length === 0) {
-    pendingTableBody.innerHTML = '<tr><td colspan="7">没有待审核数据</td></tr>';
-    return
-  }
-  configs.forEach(config => {
-    const row = document.createElement('tr');
-    const safeName = escapeHTML(config.name || '');
-    const normalizedUrl = normalizeUrl(config.url);
-    const urlCell = normalizedUrl
-      ? `<a href="${escapeHTML(normalizedUrl)}" target="_blank" rel="noopener noreferrer">${escapeHTML(normalizedUrl)}</a>`
-      : (config.url ? escapeHTML(config.url) : '未提供');
-    const normalizedLogo = normalizeUrl(config.logo);
-    const logoCell = normalizedLogo
-      ? `<img src="${escapeHTML(normalizedLogo)}" alt="${safeName}" style="width:30px;" />`
-      : 'N/A';
-    const descCell = config.desc ? escapeHTML(config.desc) : 'N/A';
-    const catelogCell = escapeHTML(config.catelog || '');
-    row.innerHTML = `
-      <td>${config.id}</td>
-      <td>${safeName}</td>
-      <td>${urlCell}</td>
-      <td>${logoCell}</td>
-      <td>${descCell}</td>
-      <td>${catelogCell}</td>
-      <td class="actions">
-        <button class="approve-btn" data-id="${config.id}">批准</button>
-        <button class="reject-btn" data-id="${config.id}">拒绝</button>
-      </td>
-    `;
-    pendingTableBody.appendChild(row);
-  });
-  bindPendingActionEvents();
-}
-
-function bindPendingActionEvents() {
-  document.querySelectorAll('.approve-btn').forEach(btn => {
-    btn.addEventListener('click', function () {
-      const id = this.dataset.id;
-      handleApprove(id);
-    })
-  });
-
-  document.querySelectorAll('.reject-btn').forEach(btn => {
-    btn.addEventListener('click', function () {
-      const id = this.dataset.id;
-      handleReject(id);
-    })
-  })
-}
-
-function handleApprove(id) {
-  if (!confirm('确定批准吗？')) return;
-  fetch(`/api/pending/${id}`, {
-    method: 'PUT',
-  }).then(res => res.json())
-    .then(data => {
-      if (data.code === 200) {
-        showMessage('批准成功', 'success');
-        fetchPendingConfigs();
-        fetchConfigs();
-      } else {
-        showMessage(data.message, 'error')
-      }
-    }).catch(err => {
-      showMessage('网络错误', 'error');
-    })
-}
-
-function handleReject(id) {
-  if (!confirm('确定拒绝吗？')) return;
-  fetch(`/api/pending/${id}`, {
-    method: 'DELETE'
-  }).then(res => res.json())
-    .then(data => {
-      if (data.code === 200) {
-        showMessage('拒绝成功', 'success');
-        fetchPendingConfigs();
-      } else {
-        showMessage(data.message, 'error');
-      }
-    }).catch(err => {
-      showMessage('网络错误', 'error');
-    })
-}
-
-function updatePendingPaginationButtons() {
-  pendingPrevPageBtn.disabled = pendingCurrentPage === 1;
-  pendingNextPageBtn.disabled = pendingCurrentPage >= Math.ceil(pendingTotalItems / pendingPageSize)
-}
-
-pendingPrevPageBtn.addEventListener('click', () => {
-  if (pendingCurrentPage > 1) {
-    fetchPendingConfigs(pendingCurrentPage - 1);
-  }
-});
-
-pendingNextPageBtn.addEventListener('click', () => {
-  if (pendingCurrentPage < Math.ceil(pendingTotalItems / pendingPageSize)) {
-    fetchPendingConfigs(pendingCurrentPage + 1)
-  }
-});
-
-function updateCategoryPaginationButtons() {
-  categoryPrevPageBtn.disabled = categoryCurrentPage === 1;
-  categoryNextPageBtn.disabled = categoryCurrentPage >= Math.ceil(categoryTotalItems / categoryPageSize)
-}
-
-categoryPrevPageBtn.addEventListener('click', () => {
-  if (categoryCurrentPage > 1) {
-    fetchCategories(categoryCurrentPage - 1);
-  }
-});
-
-categoryNextPageBtn.addEventListener('click', () => {
-  if (categoryCurrentPage < Math.ceil(categoryTotalItems / categoryPageSize)) {
-    fetchCategories(categoryCurrentPage + 1)
-  }
-});
-
-// 初始化加载数据
-fetchConfigs();
-fetchPendingConfigs();
-if (categoryGrid) {
-  fetchCategories();
-}
-
-
-// ========== 新增分类功能 ==========
-const addCategoryBtn = document.getElementById('addCategoryBtn');
-const addCategoryModal = document.getElementById('addCategoryModal');
-const closeCategoryModal = document.getElementById('closeCategoryModal');
-const addCategoryForm = document.getElementById('addCategoryForm');
+// Replace populateParentCategorySelect with createCascadingDropdown calls
+// We remove the old function and update call sites.
 
 if (addCategoryBtn) {
   addCategoryBtn.addEventListener('click', () => {
+    // Populate dropdown
+    createCascadingDropdown('newCategoryParentWrapper', 'newCategoryParent', categoriesTree, '0');
     addCategoryModal.style.display = 'block';
   });
 }
+
+// ... existing code ...
+
 
 if (closeCategoryModal) {
   closeCategoryModal.addEventListener('click', () => {
@@ -1174,12 +1552,14 @@ if (editCategoryForm) {
     const id = document.getElementById('editCategoryId').value;
     const categoryName = document.getElementById('editCategoryName').value.trim();
     const sortOrder = document.getElementById('editCategorySortOrder').value.trim();
+    const parentId = document.getElementById('editCategoryParent').value;
 
     if (!categoryName) {
       showMessage('分类名称不能为空', 'error');
       return;
     }
 
+    // Check duplicate name (excluding self)
     const isDuplicate = categoriesData.some(category => category.catelog.toLowerCase() === categoryName.toLowerCase() && category.id != id);
     if (isDuplicate) {
       showMessage('该分类名称已存在', 'error');
@@ -1188,6 +1568,7 @@ if (editCategoryForm) {
 
     const payload = {
       catelog: categoryName,
+      parent_id: parentId
     };
 
     if (sortOrder !== '') {
@@ -1222,6 +1603,7 @@ if (addCategoryForm) {
 
     const categoryName = document.getElementById('newCategoryName').value.trim();
     const sortOrder = document.getElementById('newCategorySortOrder').value.trim();
+    const parentId = document.getElementById('newCategoryParent').value;
 
     if (!categoryName) {
       showMessage('分类名称不能为空', 'error');
@@ -1229,7 +1611,8 @@ if (addCategoryForm) {
     }
 
     const payload = {
-      catelog: categoryName
+      catelog: categoryName,
+      parent_id: parentId
     };
 
     if (sortOrder !== '') {
@@ -1270,30 +1653,24 @@ const closeBookmarkModal = document.getElementById('closeBookmarkModal');
 const addBookmarkForm = document.getElementById('addBookmarkForm');
 const addBookmarkCatelogSelect = document.getElementById('addBookmarkCatelog');
 
-async function fetchCategoriesForSelect(selectElement) {
-  try {
-    const response = await fetch('/api/categories?pageSize=999');
-    const data = await response.json();
-    if (data.code === 200 && data.data) {
-      selectElement.innerHTML = '';
-      data.data.forEach(category => {
-        const option = document.createElement('option');
-        option.value = category.id;
-        option.textContent = category.catelog;
-        selectElement.appendChild(option);
-      });
-    } else {
-      showMessage('加载分类列表失败', 'error');
-    }
-  } catch (error) {
-    showMessage('网络错误，无法加载分类', 'error');
-  }
-}
-
 if (addBookmarkBtn) {
   addBookmarkBtn.addEventListener('click', () => {
-    addBookmarkModal.style.display = 'block';
-    fetchCategoriesForSelect(addBookmarkCatelogSelect);
+    if (categoriesTree.length === 0) {
+        // Fallback fetch if empty
+        fetch('/api/categories?pageSize=999').then(res => res.json()).then(data => {
+            if(data.code === 200) {
+                categoriesData = data.data || [];
+                categoriesTree = buildCategoryTree(categoriesData);
+                createCascadingDropdown('addBookmarkCatelogWrapper', 'addBookmarkCatelog', categoriesTree);
+                addBookmarkModal.style.display = 'block';
+            } else {
+                showMessage('无法加载分类数据', 'error');
+            }
+        });
+    } else {
+        createCascadingDropdown('addBookmarkCatelogWrapper', 'addBookmarkCatelog', categoriesTree);
+        addBookmarkModal.style.display = 'block';
+    }
   });
 }
 
@@ -1374,7 +1751,7 @@ if (addBookmarkForm) {
 // ===================================
 // 新版 设置模态框逻辑 (Settings Modal)
 // ===================================
-document.addEventListener('DOMContentLoaded', () => {
+const initSettings = () => {
   const settingsBtn = document.getElementById('settingsBtn');
   const settingsModal = document.getElementById('settingsModal');
   if (!settingsBtn || !settingsModal) return;
@@ -1405,7 +1782,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const bgBlurIntensityRange = document.getElementById('bgBlurIntensity');
   const bgBlurIntensityValue = document.getElementById('bgBlurIntensityValue');
   const bingCountrySelect = document.getElementById('bingCountry');
-  const bingWallpapersDiv = document.getElementById('bingWallpapers');
+  const onlineWallpapersDiv = document.getElementById('onlineWallpapers');
+  const wpSourceBingBtn = document.getElementById('wpSourceBing');
+  const wpSource360Btn = document.getElementById('wpSource360');
+  const category360Select = document.getElementById('category360');
 
   // AI Provider Elements
   const providerSelector = document.getElementById('providerSelector');
@@ -1444,7 +1824,9 @@ document.addEventListener('DOMContentLoaded', () => {
     layout_random_wallpaper: false,
     layout_enable_bg_blur: false,
     layout_bg_blur_intensity: '0',
-    bing_country: ''
+    bing_country: '',
+    wallpaper_source: 'bing',
+    wallpaper_cid_360: '36'
   };
 
   let shouldStopBulkGeneration = false;
@@ -1467,60 +1849,251 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   fetchPublicConfig();
 
-  // --- Bing Wallpaper Logic ---
+  // --- Online Wallpaper Logic ---
+
+  // Inject Custom CSS for Wallpaper Interactions to guarantee stability
+  const wpStyleId = 'wallpaper-custom-styles';
+  if (!document.getElementById(wpStyleId)) {
+      const style = document.createElement('style');
+      style.id = wpStyleId;
+      style.textContent = `
+          /* Wallpaper Cards Styles */
+          .wp-card-wrapper {
+              position: relative;
+              overflow: hidden;
+              border-radius: 0.5rem;
+              cursor: pointer;
+              background-color: #f3f4f6;
+              border: 1px solid #e5e7eb;
+              transition: border-color 0.3s;
+          }
+          .wp-card-wrapper:hover {
+              border-color: #6366f1;
+          }
+          .wp-card-image-container {
+              width: 100%;
+              height: 100%;
+              overflow: hidden;
+          }
+          .wp-card-image {
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+              display: block;
+              transition: transform 0.5s ease;
+              transform: scale(1) translateZ(0);
+              will-change: transform;
+          }
+          .wp-card-wrapper:hover .wp-card-image {
+              transform: scale(1.15) translateZ(0) !important;
+          }
+          .wp-card-overlay {
+              position: absolute;
+              inset: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background-color: rgba(0, 0, 0, 0);
+              transition: background-color 0.3s;
+              pointer-events: none;
+          }
+          .wp-card-wrapper:hover .wp-card-overlay {
+              background-color: rgba(0, 0, 0, 0.1);
+          }
+          .wp-card-btn {
+              opacity: 0;
+              transition: opacity 0.3s;
+              background-color: rgba(0, 0, 0, 0.5);
+              color: white;
+              font-size: 0.75rem;
+              padding: 0.25rem 0.5rem;
+              border-radius: 0.25rem;
+          }
+          .wp-card-wrapper:hover .wp-card-btn {
+              opacity: 1;
+          }
+
+          /* Fix: Ensure Site Card Hover Animation works after dynamic rendering */
+          .site-card:hover {
+              transform: scale(1.15) translateY(-10px) !important;
+              box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15) !important;
+              z-index: 10 !important;
+              border: 2px solid #416d9d !important;
+          }
+      `;
+      document.head.appendChild(style);
+  }
+
+  // Helper to render card
+  function renderWallpaperCard(thumb, full, title) {
+    if (!onlineWallpapersDiv) return;
+    const div = document.createElement('div');
+    
+    // Use custom classes + standard Tailwind aspect ratio
+    div.className = 'wp-card-wrapper aspect-video';
+    div.title = title;
+
+    div.innerHTML = `
+      <div class="wp-card-image-container">
+        <img src="${thumb}" class="wp-card-image" alt="${title}">
+      </div>
+      <div class="wp-card-overlay">
+        <span class="wp-card-btn">应用</span>
+      </div>`;
+    
+    div.addEventListener('click', () => {
+        if (customWallpaperInput) {
+            customWallpaperInput.value = full;
+            customWallpaperInput.classList.add('bg-green-50');
+            setTimeout(() => customWallpaperInput.classList.remove('bg-green-50'), 300);
+        }
+    });
+    onlineWallpapersDiv.appendChild(div);
+  }
+
+  // Fetch Bing Wallpapers
   async function fetchBingWallpapers(country = '') {
-      if (!bingWallpapersDiv) return;
-      bingWallpapersDiv.innerHTML = '<div class="col-span-full text-center text-gray-400 py-8 text-sm">加载中...</div>';
+      if (!onlineWallpapersDiv) return;
+      onlineWallpapersDiv.innerHTML = '<div class="col-span-full text-center text-gray-400 py-8 text-sm">加载中...</div>';
       
       try {
           let url = '';
           if (country === 'spotlight') {
-              url = 'https://peapix.com/spotlight/feed?n=7';
+              url = 'https://peapix.com/spotlight/feed?n=8';
           } else {
-              url = `https://peapix.com/bing/feed?n=7&country=${country}`;
+              url = `https://peapix.com/bing/feed?n=8&country=${country}`;
           }
           
           const res = await fetch(url);
           if (!res.ok) throw new Error('API Request Failed');
           const data = await res.json();
           
-          bingWallpapersDiv.innerHTML = '';
+          onlineWallpapersDiv.innerHTML = '';
           
           if (!Array.isArray(data) || data.length === 0) {
-              bingWallpapersDiv.innerHTML = '<div class="col-span-full text-center text-gray-400 py-8 text-sm">未获取到壁纸</div>';
+              onlineWallpapersDiv.innerHTML = '<div class="col-span-full text-center text-gray-400 py-8 text-sm">未获取到壁纸</div>';
               return;
           }
           
           data.forEach(item => {
-              // item.thumbUrl usually 480x360 or similar
-              // item.fullUrl usually 1920x1080
-              const thumb = item.thumbUrl || item.url; // Fallback
-              const full = item.fullUrl || item.url;   // Fallback
+              const thumb = item.thumbUrl || item.url;
+              const full = item.fullUrl || item.url;
               const title = item.title || 'Bing Wallpaper';
-              
-              const div = document.createElement('div');
-              div.className = 'relative group cursor-pointer rounded-lg overflow-hidden border border-gray-200 hover:border-primary-500 transition-all aspect-video bg-gray-100';
-              div.title = title;
-              div.innerHTML = `<img src="${thumb}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="${title}">
-                               <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                                  <span class="opacity-0 group-hover:opacity-100 bg-black/50 text-white text-xs px-2 py-1 rounded">应用</span>
-                               </div>`;
-              
-              div.addEventListener('click', () => {
-                  if (customWallpaperInput) {
-                      customWallpaperInput.value = full;
-                      // Optional: Flash input to indicate change
-                      customWallpaperInput.classList.add('bg-green-50');
-                      setTimeout(() => customWallpaperInput.classList.remove('bg-green-50'), 300);
-                  }
-              });
-              
-              bingWallpapersDiv.appendChild(div);
+              renderWallpaperCard(thumb, full, title);
           });
           
       } catch (err) {
           console.error('Bing Wallpaper Fetch Error:', err);
-          bingWallpapersDiv.innerHTML = '<div class="col-span-full text-center text-red-400 py-8 text-sm">加载失败，请检查网络或稍后重试</div>';
+          onlineWallpapersDiv.innerHTML = '<div class="col-span-full text-center text-red-400 py-8 text-sm">加载失败，请检查网络或稍后重试</div>';
+      }
+  }
+
+  // Fetch 360 Categories
+  async function fetch360Categories() {
+      if (!category360Select || category360Select.options.length > 1) return; // Already loaded or missing
+      
+      try {
+          const res = await fetch('/api/wallpaper?source=360&action=categories');
+          if (!res.ok) throw new Error('Failed to fetch categories');
+          const result = await res.json();
+          
+          // Proxy wraps response in { code: 200, data: { errno: "0", data: [...] } }
+          const apiData = result.data;
+
+          if (result.code === 200 && apiData && apiData.data && Array.isArray(apiData.data)) {
+              category360Select.innerHTML = '';
+              apiData.data.forEach(cat => {
+                  const option = document.createElement('option');
+                  option.value = cat.id;
+                  option.textContent = cat.name;
+                  if (cat.id == '36') option.selected = true; // Default to 4K
+                  category360Select.appendChild(option);
+              });
+          }
+      } catch (e) {
+          console.error('360 Categories Error', e);
+      }
+  }
+
+  // Fetch 360 Wallpapers
+  async function fetch360Wallpapers(cid = '36') {
+      if (!onlineWallpapersDiv) return;
+      onlineWallpapersDiv.innerHTML = '<div class="col-span-full text-center text-gray-400 py-8 text-sm">加载中...</div>';
+      
+      try {
+          const res = await fetch(`/api/wallpaper?source=360&action=list&cid=${cid}&start=0&count=8`);
+          if (!res.ok) throw new Error('API Request Failed');
+          const result = await res.json();
+          
+          // Proxy wraps response in { code: 200, data: { errno: "0", data: [...] } }
+          const apiData = result.data;
+          
+          if (result.code !== 200 || !apiData || !apiData.data || apiData.data.length === 0) {
+               onlineWallpapersDiv.innerHTML = '<div class="col-span-full text-center text-gray-400 py-8 text-sm">未获取到壁纸</div>';
+               return;
+          }
+          
+          onlineWallpapersDiv.innerHTML = '';
+          apiData.data.forEach(item => {
+              // Prefer img_1024_768 for thumbnail to speed up loading, fallback to others
+              let thumb = item.img_1024_768 || item.url_thumb || item.url;
+              let full = item.url;
+              
+              // Ensure HTTPS
+              if (thumb && thumb.startsWith('http:')) thumb = thumb.replace('http:', 'https:');
+              if (full && full.startsWith('http:')) full = full.replace('http:', 'https:');
+
+              const title = item.tag || '360 Wallpaper';
+              renderWallpaperCard(thumb, full, title);
+          });
+          
+      } catch (err) {
+          console.error('360 Wallpaper Error:', err);
+          onlineWallpapersDiv.innerHTML = '<div class="col-span-full text-center text-red-400 py-8 text-sm">加载失败</div>';
+      }
+  }
+
+  function switchWallpaperSource(source) {
+      currentSettings.wallpaper_source = source;
+      
+      // Toggle Buttons Style
+      if (source === 'bing') {
+          if(wpSourceBingBtn) {
+            wpSourceBingBtn.classList.add('bg-white', 'text-gray-800', 'shadow-sm');
+            wpSourceBingBtn.classList.remove('text-gray-600', 'hover:text-gray-800', 'hover:bg-white/50');
+          }
+          if(wpSource360Btn) {
+            wpSource360Btn.classList.remove('bg-white', 'text-gray-800', 'shadow-sm');
+            wpSource360Btn.classList.add('text-gray-600', 'hover:text-gray-800', 'hover:bg-white/50');
+          }
+          
+          if(bingCountrySelect) bingCountrySelect.classList.remove('hidden');
+          if(category360Select) category360Select.classList.add('hidden');
+          
+          fetchBingWallpapers(currentSettings.bing_country);
+      } else {
+          if(wpSource360Btn) {
+            wpSource360Btn.classList.add('bg-white', 'text-gray-800', 'shadow-sm');
+            wpSource360Btn.classList.remove('text-gray-600', 'hover:text-gray-800', 'hover:bg-white/50');
+          }
+          if(wpSourceBingBtn) {
+            wpSourceBingBtn.classList.remove('bg-white', 'text-gray-800', 'shadow-sm');
+            wpSourceBingBtn.classList.add('text-gray-600', 'hover:text-gray-800', 'hover:bg-white/50');
+          }
+          
+          if(bingCountrySelect) bingCountrySelect.classList.add('hidden');
+          if(category360Select) category360Select.classList.remove('hidden');
+          
+          if (onlineWallpapersDiv) {
+              onlineWallpapersDiv.innerHTML = '<div class="col-span-full text-center text-gray-400 py-8 text-sm">加载中...</div>';
+          }
+          
+          fetch360Categories().then(() => {
+              if (category360Select && currentSettings.wallpaper_cid_360) {
+                  category360Select.value = currentSettings.wallpaper_cid_360;
+              }
+              fetch360Wallpapers(currentSettings.wallpaper_cid_360 || '36');
+          });
       }
   }
 
@@ -1563,17 +2136,33 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        // Auto fetch bing wallpapers if tab is active and empty
-        if (tabId === 'wallpaper-settings' && bingWallpapersDiv && (!bingWallpapersDiv.children.length || bingWallpapersDiv.innerText.includes('加载中'))) {
-            fetchBingWallpapers(currentSettings.bing_country);
+        // Auto fetch wallpapers if tab is active and empty
+        if (tabId === 'wallpaper-settings' && onlineWallpapersDiv && (!onlineWallpapersDiv.children.length || onlineWallpapersDiv.innerText.includes('加载中'))) {
+            switchWallpaperSource(currentSettings.wallpaper_source || 'bing');
         }
     });
   });
   
+  // Wallpaper Source Switching
+  if (wpSourceBingBtn) {
+      wpSourceBingBtn.addEventListener('click', () => switchWallpaperSource('bing'));
+  }
+  if (wpSource360Btn) {
+      wpSource360Btn.addEventListener('click', () => switchWallpaperSource('360'));
+  }
+
+  // Filters
   if (bingCountrySelect) {
       bingCountrySelect.addEventListener('change', () => {
           currentSettings.bing_country = bingCountrySelect.value;
           fetchBingWallpapers(currentSettings.bing_country);
+      });
+  }
+  
+  if (category360Select) {
+      category360Select.addEventListener('change', () => {
+          currentSettings.wallpaper_cid_360 = category360Select.value;
+          fetch360Wallpapers(category360Select.value);
       });
   }
 
@@ -1599,6 +2188,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentSettings.layout_enable_bg_blur = bgBlurSwitch.checked;
     currentSettings.layout_bg_blur_intensity = bgBlurIntensityRange.value;
     currentSettings.bing_country = bingCountrySelect.value;
+    currentSettings.wallpaper_cid_360 = category360Select.value;
     
     // Get Grid Cols
     for (const radio of gridColsRadios) {
@@ -1697,6 +2287,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (serverSettings.layout_enable_bg_blur !== undefined) currentSettings.layout_enable_bg_blur = serverSettings.layout_enable_bg_blur === 'true';
             if (serverSettings.layout_bg_blur_intensity) currentSettings.layout_bg_blur_intensity = serverSettings.layout_bg_blur_intensity;
             if (serverSettings.bing_country !== undefined) currentSettings.bing_country = serverSettings.bing_country;
+            if (serverSettings.wallpaper_source) currentSettings.wallpaper_source = serverSettings.wallpaper_source;
+            if (serverSettings.wallpaper_cid_360) currentSettings.wallpaper_cid_360 = serverSettings.wallpaper_cid_360;
 
         } else {
             // Fallback to localStorage if server has no data (migration)
@@ -2127,4 +2719,8 @@ document.addEventListener('DOMContentLoaded', () => {
       handleSingleGenerate('editBookmarkName', 'editBookmarkUrl', 'editBookmarkDesc', 'editBookmarkAiBtn', 'editBookmarkModal');
     });
   }
-});
+};
+initSettings();
+
+// Init Data
+fetchConfigs();
