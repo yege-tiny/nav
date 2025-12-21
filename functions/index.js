@@ -1,6 +1,29 @@
 // functions/index.js
 import { isAdminAuthenticated } from './_middleware';
 
+// 字体映射表 (System Fonts + Google Fonts Mirror)
+const FONT_MAP = {
+  // System Fonts (无需引入)
+  'sans-serif': null,
+  'serif': null,
+  'monospace': null,
+  "'Microsoft YaHei', sans-serif": null,
+  "'SimSun', serif": null,
+  "'PingFang SC', sans-serif": null,
+  "'Segoe UI', sans-serif": null,
+  
+  // Web Fonts (fonts.loli.net)
+  "'Noto Sans SC', sans-serif": "https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap",
+  "'Noto Serif SC', serif": "https://fonts.loli.net/css2?family=Noto+Serif+SC:wght@400;700&display=swap",
+  "'Ma Shan Zheng', cursive": "https://fonts.loli.net/css2?family=Ma+Shan+Zheng&display=swap", // 书法
+  "'ZCOOL KuaiLe', cursive": "https://fonts.loli.net/css2?family=ZCOOL+KuaiLe&display=swap", // 快乐体
+  "'Long Cang', cursive": "https://fonts.loli.net/css2?family=Long+Cang&display=swap", // 草书
+  "'Roboto', sans-serif": "https://fonts.loli.net/css2?family=Roboto:wght@300;400;500;700&display=swap",
+  "'Open Sans', sans-serif": "https://fonts.loli.net/css2?family=Open+Sans:wght@400;600;700&display=swap",
+  "'Lato', sans-serif": "https://fonts.loli.net/css2?family=Lato:wght@400;700&display=swap",
+  "'Montserrat', sans-serif": "https://fonts.loli.net/css2?family=Montserrat:wght@400;700&display=swap"
+};
+
 // 辅助函数
 function escapeHTML(str) {
   if (!str) return '';
@@ -149,7 +172,27 @@ export async function onRequest(context) {
   let layoutHideLinks = false;
   let layoutHideCategory = false;
   let layoutHideTitle = false;
+  let homeTitleSize = '';
+  let homeTitleColor = '';
   let layoutHideSubtitle = false;
+  let homeSubtitleSize = '';
+  let homeSubtitleColor = '';
+  let homeHideStats = false;
+  let homeStatsSize = '';
+  let homeStatsColor = '';
+  let homeHideHitokoto = false;
+  let homeHitokotoSize = '';
+  let homeHitokotoColor = '';
+  let homeHideGithub = false;
+  let homeHideAdmin = false;
+  let homeCustomFontUrl = '';
+  let homeTitleFont = '';
+  let homeSubtitleFont = '';
+  let homeStatsFont = '';
+  let homeHitokotoFont = '';
+  let homeSiteName = '';
+  let homeSiteDescription = '';
+  let homeSearchEngineEnabled = false;
   let layoutGridCols = '4';
   let layoutCustomWallpaper = '';
   let layoutMenuLayout = 'horizontal';
@@ -159,18 +202,77 @@ export async function onRequest(context) {
   let layoutFrostedGlassIntensity = '15';
   let layoutEnableBgBlur = false;
   let layoutBgBlurIntensity = '0';
+  let layoutCardStyle = 'style1';
+  let layoutCardBorderRadius = '12';
   let wallpaperSource = 'bing';
   let wallpaperCid360 = '36';
+  
+  let cardTitleFont = '';
+  let cardTitleSize = '';
+  let cardTitleColor = '';
+  let cardDescFont = '';
+  let cardDescSize = '';
+  let cardDescColor = '';
 
   try {
-    const { results } = await env.NAV_DB.prepare("SELECT key, value FROM settings WHERE key IN ('layout_hide_desc', 'layout_hide_links', 'layout_hide_category', 'layout_hide_title', 'layout_hide_subtitle', 'layout_grid_cols', 'layout_custom_wallpaper', 'layout_menu_layout', 'layout_random_wallpaper', 'bing_country', 'layout_enable_frosted_glass', 'layout_frosted_glass_intensity', 'layout_enable_bg_blur', 'layout_bg_blur_intensity', 'wallpaper_source', 'wallpaper_cid_360')").all();
+    const keys = [
+        'layout_hide_desc', 'layout_hide_links', 'layout_hide_category',
+        'layout_hide_title', 'home_title_size', 'home_title_color',
+        'layout_hide_subtitle', 'home_subtitle_size', 'home_subtitle_color',
+        'home_hide_stats', 'home_stats_size', 'home_stats_color',
+        'home_hide_hitokoto', 'home_hitokoto_size', 'home_hitokoto_color',
+        'home_hide_github', 'home_hide_admin',
+        'home_custom_font_url', 'home_title_font', 'home_subtitle_font', 'home_stats_font', 'home_hitokoto_font',
+        'home_site_name', 'home_site_description',
+        'home_search_engine_enabled',
+        'layout_grid_cols', 'layout_custom_wallpaper', 'layout_menu_layout',
+        'layout_random_wallpaper', 'bing_country',
+        'layout_enable_frosted_glass', 'layout_frosted_glass_intensity',
+        'layout_enable_bg_blur', 'layout_bg_blur_intensity', 'layout_card_style',
+        'layout_card_border_radius',
+        'wallpaper_source', 'wallpaper_cid_360',
+        'card_title_font', 'card_title_size', 'card_title_color',
+        'card_desc_font', 'card_desc_size', 'card_desc_color'
+    ];
+    const placeholders = keys.map(() => '?').join(',');
+    const { results } = await env.NAV_DB.prepare(`SELECT key, value FROM settings WHERE key IN (${placeholders})`).bind(...keys).all();
+
     if (results) {
       results.forEach(row => {
         if (row.key === 'layout_hide_desc') layoutHideDesc = row.value === 'true';
         if (row.key === 'layout_hide_links') layoutHideLinks = row.value === 'true';
         if (row.key === 'layout_hide_category') layoutHideCategory = row.value === 'true';
+        
         if (row.key === 'layout_hide_title') layoutHideTitle = row.value === 'true';
+        if (row.key === 'home_title_size') homeTitleSize = row.value;
+        if (row.key === 'home_title_color') homeTitleColor = row.value;
+
         if (row.key === 'layout_hide_subtitle') layoutHideSubtitle = row.value === 'true';
+        if (row.key === 'home_subtitle_size') homeSubtitleSize = row.value;
+        if (row.key === 'home_subtitle_color') homeSubtitleColor = row.value;
+
+        if (row.key === 'home_hide_stats') homeHideStats = row.value === 'true';
+        if (row.key === 'home_stats_size') homeStatsSize = row.value;
+        if (row.key === 'home_stats_color') homeStatsColor = row.value;
+
+        if (row.key === 'home_hide_hitokoto') homeHideHitokoto = row.value === 'true';
+        if (row.key === 'home_hitokoto_size') homeHitokotoSize = row.value;
+        if (row.key === 'home_hitokoto_color') homeHitokotoColor = row.value;
+        
+        if (row.key === 'home_hide_github') homeHideGithub = (row.value === 'true' || row.value === '1');
+        if (row.key === 'home_hide_admin') homeHideAdmin = (row.value === 'true' || row.value === '1');
+
+        if (row.key === 'home_custom_font_url') homeCustomFontUrl = row.value;
+        if (row.key === 'home_title_font') homeTitleFont = row.value;
+        if (row.key === 'home_subtitle_font') homeSubtitleFont = row.value;
+        if (row.key === 'home_stats_font') homeStatsFont = row.value;
+        if (row.key === 'home_hitokoto_font') homeHitokotoFont = row.value;
+
+        if (row.key === 'home_site_name') homeSiteName = row.value;
+        if (row.key === 'home_site_description') homeSiteDescription = row.value;
+
+        if (row.key === 'home_search_engine_enabled') homeSearchEngineEnabled = row.value === 'true';
+
         if (row.key === 'layout_grid_cols') layoutGridCols = row.value;
         if (row.key === 'layout_custom_wallpaper') layoutCustomWallpaper = row.value;
         if (row.key === 'layout_menu_layout') layoutMenuLayout = row.value;
@@ -180,8 +282,17 @@ export async function onRequest(context) {
         if (row.key === 'layout_frosted_glass_intensity') layoutFrostedGlassIntensity = row.value;
         if (row.key === 'layout_enable_bg_blur') layoutEnableBgBlur = row.value === 'true';
         if (row.key === 'layout_bg_blur_intensity') layoutBgBlurIntensity = row.value;
+        if (row.key === 'layout_card_style') layoutCardStyle = row.value;
+        if (row.key === 'layout_card_border_radius') layoutCardBorderRadius = row.value;
         if (row.key === 'wallpaper_source') wallpaperSource = row.value;
         if (row.key === 'wallpaper_cid_360') wallpaperCid360 = row.value;
+        
+        if (row.key === 'card_title_font') cardTitleFont = row.value;
+        if (row.key === 'card_title_size') cardTitleSize = row.value;
+        if (row.key === 'card_title_color') cardTitleColor = row.value;
+        if (row.key === 'card_desc_font') cardDescFont = row.value;
+        if (row.key === 'card_desc_size') cardDescSize = row.value;
+        if (row.key === 'card_desc_color') cardDescColor = row.value;
       });
     }
   } catch (e) {}
@@ -369,10 +480,10 @@ export async function onRequest(context) {
           <div class="mt-3 flex items-center justify-between">
             <span class="text-xs text-primary-600 truncate max-w-[140px]" title="${safeDisplayUrl}">${escapeHTML(safeDisplayUrl)}</span>
             <button class="copy-btn relative flex items-center px-2 py-1 ${hasValidUrl ? 'bg-accent-100 text-accent-700 hover:bg-accent-200' : 'bg-gray-200 text-gray-400 cursor-not-allowed'} rounded-full text-xs font-medium transition-colors" data-url="${escapeHTML(normalizedUrl)}" ${hasValidUrl ? '' : 'disabled'}>
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ${layoutGridCols === '5' ? '' : 'mr-1'}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ${layoutGridCols >= '5' ? '' : 'mr-1'}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
               </svg>
-              ${layoutGridCols === '5' ? '' : '<span class="copy-text">复制</span>'}
+              ${layoutGridCols >= '5' ? '' : '<span class="copy-text">复制</span>'}
               <span class="copy-success hidden absolute -top-8 right-0 bg-accent-500 text-white text-xs px-2 py-1 rounded shadow-md">已复制!</span>
             </button>
           </div>`;
@@ -382,13 +493,14 @@ export async function onRequest(context) {
                 </span>`;
     
     const frostedClass = layoutEnableFrostedGlass ? 'frosted-glass-effect' : '';
+    const cardStyleClass = layoutCardStyle === 'style2' ? 'style-2' : '';
     const baseCardClass = layoutEnableFrostedGlass 
-        ? 'site-card group rounded-xl overflow-hidden transition-all' 
-        : 'site-card group bg-white border border-primary-100/60 rounded-xl shadow-sm overflow-hidden';
+        ? 'site-card group overflow-hidden transition-all' 
+        : 'site-card group bg-white border border-primary-100/60 shadow-sm overflow-hidden';
 
     return `
-      <div class="${baseCardClass} ${frostedClass}" data-id="${site.id}" data-name="${escapeHTML(site.name)}" data-url="${escapeHTML(normalizedUrl)}" data-catalog="${escapeHTML(site.catelog)}">
-        <div class="p-5">
+      <div class="${baseCardClass} ${frostedClass} ${cardStyleClass}" data-id="${site.id}" data-name="${escapeHTML(site.name)}" data-url="${escapeHTML(normalizedUrl)}" data-catalog="${escapeHTML(site.catelog)}">
+        <div class="site-card-content">
           <a href="${escapeHTML(normalizedUrl || '#')}" ${hasValidUrl ? 'target="_blank" rel="noopener noreferrer"' : ''} class="block">
             <div class="flex items-start">
               <div class="site-icon flex-shrink-0 mr-4 transition-all duration-300">
@@ -411,9 +523,13 @@ export async function onRequest(context) {
     `;
   }).join('');
 
-  let gridClass = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6';
+  let gridClass = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6 justify-items-center';
   if (layoutGridCols === '5') {
-      gridClass = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6';
+      gridClass = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6 justify-items-center';
+  } else if (layoutGridCols === '6') {
+      gridClass = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-6 justify-items-center';
+  } else if (layoutGridCols === '7') {
+      gridClass = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-6 justify-items-center';
   }
 
   const datalistOptions = categories.map((cat) => `<option value="${escapeHTML(cat.catelog)}">`).join('');
@@ -427,15 +543,51 @@ export async function onRequest(context) {
   const submissionEnabled = String(env.ENABLE_PUBLIC_SUBMISSION) === 'true';
   const submissionClass = submissionEnabled ? '' : 'hidden';
 
-  const siteName = env.SITE_NAME || '灰色轨迹';
-  const siteDescription = env.SITE_DESCRIPTION || '一个优雅、快速、易于部署的书签（网址）收藏与分享平台，完全基于 Cloudflare 全家桶构建';
+  const siteName = homeSiteName || env.SITE_NAME || '灰色轨迹';
+  const siteDescription = homeSiteDescription || env.SITE_DESCRIPTION || '一个优雅、快速、易于部署的书签（网址）收藏与分享平台，完全基于 Cloudflare 全家桶构建';
   const footerText = env.FOOTER_TEXT || '曾梦想仗剑走天涯';
+
+  // Build Style Strings
+  const getStyleStr = (size, color, font) => {
+    let s = '';
+    if (size) s += `font-size: ${size}px;`;
+    if (color) s += `color: ${color} !important;`;
+    if (font) s += `font-family: ${font} !important;`;
+    return s ? `style="${s}"` : '';
+  };
   
-  const mainTitleHtml = layoutHideTitle ? '' : `<h1 class="mt-4 text-3xl md:text-4xl font-semibold tracking-tight ${titleColorClass}">{{SITE_NAME}}</h1>`;
-  const subtitleHtml = layoutHideSubtitle ? '' : `<p class="mt-3 text-sm md:text-base ${subTextColorClass} leading-relaxed">{{SITE_DESCRIPTION}}</p>`;
-  
-  const horizontalTitleHtml = layoutHideTitle ? '' : `<h1 class="text-3xl md:text-4xl font-bold tracking-tight mb-3 ${titleColorClass}">{{SITE_NAME}}</h1>`;
-  const horizontalSubtitleHtml = layoutHideSubtitle ? '' : `<p class="${subTextColorClass} opacity-90 text-sm md:text-base">{{SITE_DESCRIPTION}}</p>`;
+  const titleStyle = getStyleStr(homeTitleSize, homeTitleColor, homeTitleFont);
+  const subtitleStyle = getStyleStr(homeSubtitleSize, homeSubtitleColor, homeSubtitleFont);
+  const statsStyle = getStyleStr(homeStatsSize, homeStatsColor, homeStatsFont);
+  const hitokotoStyle = getStyleStr(homeHitokotoSize, homeHitokotoColor, homeHitokotoFont);
+  const hitokotoContent = homeHideHitokoto ? '' : '疏影横斜水清浅,暗香浮动月黄昏。';
+
+  // Determine if the stats row should be rendered with padding/margin
+  const shouldRenderStatsRow = !homeHideStats || !homeHideHitokoto;
+  const statsRowPyClass = shouldRenderStatsRow ? 'py-8' : 'pt-8';
+  const statsRowMbClass = shouldRenderStatsRow ? 'mb-6' : 'mb-4';
+  const statsRowHiddenClass = shouldRenderStatsRow ? '' : 'hidden';
+
+  const horizontalTitleHtml = layoutHideTitle ? '' : `<h1 class="text-3xl md:text-4xl font-bold tracking-tight mb-3 ${titleColorClass}" ${titleStyle}>{{SITE_NAME}}</h1>`;
+  const horizontalSubtitleHtml = layoutHideSubtitle ? '' : `<p class="${subTextColorClass} opacity-90 text-sm md:text-base" ${subtitleStyle}>{{SITE_DESCRIPTION}}</p>`;
+
+  // 搜索引擎选项 HTML
+  const searchEngineOptions = homeSearchEngineEnabled ? `
+    <div class="flex justify-center items-center space-x-5 mb-4 text-sm select-none" id="searchEngineWrapper">
+        <label class="search-engine-option active" data-engine="local">
+            <span>站内</span>
+        </label>
+        <label class="search-engine-option" data-engine="google">
+            <span>Google</span>
+        </label>
+        <label class="search-engine-option" data-engine="baidu">
+            <span>Baidu</span>
+        </label>
+        <label class="search-engine-option" data-engine="bing">
+            <span>Bing</span>
+        </label>
+    </div>
+  ` : '';
 
   const verticalHeaderContent = `
       <div class="max-w-4xl mx-auto text-center relative z-10 ${themeClass} py-8">
@@ -445,10 +597,13 @@ export async function onRequest(context) {
         </div>
 
         <div class="relative max-w-xl mx-auto">
-            <input type="text" name="search" placeholder="搜索书签..." class="search-input-target w-full pl-12 pr-4 py-3.5 rounded-2xl transition-all shadow-lg outline-none focus:outline-none focus:ring-2 ${searchInputClass}" autocomplete="off">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 absolute left-4 top-3.5 ${searchIconClass}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+            ${searchEngineOptions}
+            <div class="relative">
+                <input type="text" name="search" placeholder="搜索书签..." class="search-input-target w-full pl-12 pr-4 py-3.5 rounded-2xl transition-all shadow-lg outline-none focus:outline-none focus:ring-2 ${searchInputClass}" autocomplete="off">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 absolute left-4 top-3.5 ${searchIconClass}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+            </div>
         </div>
       </div>`;
       
@@ -460,10 +615,13 @@ export async function onRequest(context) {
         </div>
 
         <div class="relative max-w-xl mx-auto mb-8">
-            <input id="headerSearchInput" type="text" name="search" placeholder="搜索书签..." class="search-input-target w-full pl-12 pr-4 py-3.5 rounded-2xl transition-all shadow-lg outline-none focus:outline-none focus:ring-2 ${searchInputClass}" autocomplete="off">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 absolute left-4 top-3.5 ${searchIconClass}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+            ${searchEngineOptions}
+            <div class="relative">
+                <input id="headerSearchInput" type="text" name="search" placeholder="搜索书签..." class="search-input-target w-full pl-12 pr-4 py-3.5 rounded-2xl transition-all shadow-lg outline-none focus:outline-none focus:ring-2 ${searchInputClass}" autocomplete="off">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 absolute left-4 top-3.5 ${searchIconClass}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+            </div>
         </div>
         
         <div class="relative max-w-5xl mx-auto">
@@ -489,6 +647,7 @@ export async function onRequest(context) {
   let sidebarToggleClass = '';
   let mobileToggleVisibilityClass = 'lg:hidden';
   let githubIconHtml = '';
+  let adminIconHtml = '';
   let headerContent = verticalHeaderContent;
 
   if (layoutMenuLayout === 'horizontal') {
@@ -497,17 +656,21 @@ export async function onRequest(context) {
       sidebarToggleClass = '!hidden';
       mobileToggleVisibilityClass = 'min-[550px]:hidden';
       
-      githubIconHtml = `
-      <a href="https://slink.661388.xyz/iori-nav" target="_blank" class="fixed top-4 left-4 z-50 hidden min-[550px]:flex items-center justify-center p-2 rounded-lg bg-white/80 backdrop-blur shadow-md hover:bg-white text-gray-700 hover:text-black transition-all" title="GitHub">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
-      </a>
-      `;
+      if (!homeHideGithub) {
+          githubIconHtml = `
+          <a href="https://slink.661388.xyz/iori-nav" target="_blank" class="fixed top-4 left-4 z-50 hidden min-[550px]:flex items-center justify-center p-2 rounded-lg bg-white/80 backdrop-blur shadow-md hover:bg-white text-gray-700 hover:text-black transition-all" title="GitHub">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
+          </a>
+          `;
+      }
       
-      const adminIconHtml = `
-      <a href="/admin" target="_blank" class="fixed top-4 right-4 z-50 hidden min-[550px]:flex items-center justify-center p-2 rounded-lg bg-white/80 backdrop-blur shadow-md hover:bg-white text-gray-700 hover:text-primary-600 transition-all" title="后台管理">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M7 18a5 5 0 0 1 10 0"/></path></svg>
-      </a>
-      `;
+      if (!homeHideAdmin) {
+          adminIconHtml = `
+          <a href="/admin" target="_blank" class="fixed top-4 right-4 z-50 hidden min-[550px]:flex items-center justify-center p-2 rounded-lg bg-white/80 backdrop-blur shadow-md hover:bg-white text-gray-700 hover:text-primary-600 transition-all" title="后台管理">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M7 18a5 5 0 0 1 10 0"/></path></svg>
+          </a>
+          `;
+      }
 
       headerContent = `
         <div class="min-[550px]:hidden">
@@ -519,6 +682,25 @@ export async function onRequest(context) {
         </div>
       `;
   }
+  
+  // Also handle Sidebar GitHub/Admin icons visibility in Vertical Mode
+  // If we are in vertical mode, `githubIconHtml` is empty.
+  // The sidebar content is in `public/index.html`.
+  // We need to inject a class or hide them via replacement.
+  
+  // To keep it simple and safe:
+  // I will add a new replacement for `{{SIDEBAR_GITHUB_CLASS}}` and `{{SIDEBAR_ADMIN_CLASS}}` in `public/index.html`?
+  // But I haven't modified `public/index.html` to include those placeholders.
+  // So I have to use string replacement on known HTML structure.
+  
+  // Replace sidebar GitHub link:
+  // <a href="https://slink.661388.xyz/iori-nav" ... title="GitHub">
+  // If homeHideGithub is true, replace with empty string or hidden class.
+  
+  const sidebarGithubLinkPattern = /<a href="https:\/\/slink\.661388\.xyz\/iori-nav"[^>]*title="GitHub">[\s\S]*?<\/a>/;
+  const sidebarAdminLinkPattern = /<a href="\/admin"[^>]*>[\s\S]*?后台管理[\s\S]*?<\/a>/;
+  
+  // I'll do this replacement after fetching the template.
   
   const leftTopActionHtml = `
   <div class="fixed top-4 left-4 z-50 ${mobileToggleVisibilityClass}">
@@ -535,10 +717,24 @@ export async function onRequest(context) {
       ? 'bg-transparent py-8 px-6 mt-12 border-none shadow-none text-black'
       : 'bg-white py-8 px-6 mt-12 border-t border-primary-100';
       
-  const hitokotoClass = isCustomWallpaper ? 'text-black' : 'text-gray-500';
+  const hitokotoClass = (isCustomWallpaper ? 'text-black' : 'text-gray-500') + ' ml-auto';
 
   const templateResponse = await env.ASSETS.fetch(new URL('/index.html', request.url));
   let html = await templateResponse.text();
+  
+  // Inject CSS to hide icons if requested (More robust than regex replacement)
+  let hideIconsCss = '<style>';
+  if (homeHideGithub) {
+      hideIconsCss += 'a[title="GitHub"] { display: none !important; }';
+  }
+  if (homeHideAdmin) {
+      hideIconsCss += 'a[href^="/admin"] { display: none !important; }';
+  }
+  hideIconsCss += '</style>';
+  
+  if (hideIconsCss !== '<style></style>') {
+      html = html.replace('</head>', hideIconsCss + '</head>');
+  }
   
   const safeWallpaperUrl = sanitizeUrl(layoutCustomWallpaper);
   if (safeWallpaperUrl) {
@@ -552,9 +748,48 @@ export async function onRequest(context) {
       // 实际上 CSS body.custom-wallpaper 选择器依赖此。
   }
   
-  if (layoutEnableFrostedGlass) {
-      const cssVarInjection = `<style>:root { --frosted-glass-blur: ${layoutFrostedGlassIntensity}px; }</style>`;
-      html = html.replace('</head>', `${cssVarInjection}</head>`);
+  // Inject Card CSS Variables
+  const cardCssVars = `<style>:root { --card-padding: 1.25rem; --card-radius: ${layoutCardBorderRadius}px; --frosted-glass-blur: ${layoutFrostedGlassIntensity}px; }</style>`;
+  html = html.replace('</head>', `${cardCssVars}</head>`);
+
+  // 自动注入字体资源
+  // ... (existing code omitted for brevity but I should match context)
+  const usedFonts = new Set([
+      homeTitleFont, homeSubtitleFont, homeStatsFont, homeHitokotoFont,
+      cardTitleFont, cardDescFont
+  ]);
+  let fontLinksHtml = '';
+  
+  usedFonts.forEach(font => {
+      if (font && FONT_MAP[font]) {
+          fontLinksHtml += `<link rel="stylesheet" href="${FONT_MAP[font]}">`;
+      }
+  });
+  
+  // 兼容旧版自定义 URL
+  const safeCustomFontUrl = sanitizeUrl(homeCustomFontUrl);
+  if (safeCustomFontUrl) {
+      fontLinksHtml += `<link rel="stylesheet" href="${safeCustomFontUrl}">`;
+  }
+
+  if (fontLinksHtml) {
+      html = html.replace('</head>', `${fontLinksHtml}</head>`);
+  }
+  
+  // Inject Custom Card Fonts CSS
+  let customCardCss = '<style>';
+  if (cardTitleFont || cardTitleSize || cardTitleColor) {
+      const s = getStyleStr(cardTitleSize, cardTitleColor, cardTitleFont).replace('style="', '').replace('"', '');
+      if (s) customCardCss += `.site-title { ${s} }`;
+  }
+  if (cardDescFont || cardDescSize || cardDescColor) {
+      const s = getStyleStr(cardDescSize, cardDescColor, cardDescFont).replace('style="', '').replace('"', '');
+      if (s) customCardCss += `.site-card p { ${s} }`;
+  }
+  customCardCss += '</style>';
+  
+  if (customCardCss !== '<style></style>') {
+      html = html.replace('</head>', `${customCardCss}</head>`);
   }
 
   // Inject Layout Config for Client-side JS
@@ -564,7 +799,9 @@ export async function onRequest(context) {
         hideDesc: ${layoutHideDesc},
         hideLinks: ${layoutHideLinks},
         hideCategory: ${layoutHideCategory},
-        gridCols: "${layoutGridCols}"
+        gridCols: "${layoutGridCols}",
+        cardStyle: "${layoutCardStyle}",
+        enableFrostedGlass: ${layoutEnableFrostedGlass}
       };
     </script>
   `;
@@ -589,6 +826,14 @@ export async function onRequest(context) {
     .replace('{{HEADING_TEXT}}', headingText)
     .replace('{{HEADING_DEFAULT}}', headingDefaultAttr)
     .replace('{{HEADING_ACTIVE}}', headingActiveAttr)
+    .replace('{{STATS_VISIBLE}}', homeHideStats ? 'hidden' : '')
+    .replace('{{STATS_STYLE}}', statsStyle)
+    .replace('{{HITOKOTO_VISIBLE}}', homeHideHitokoto ? 'hidden' : '')
+    .replace('{{STATS_ROW_PY_CLASS}}', statsRowPyClass)
+    .replace('{{STATS_ROW_MB_CLASS}}', statsRowMbClass)
+    .replace('{{STATS_ROW_HIDDEN}}', statsRowHiddenClass)
+    .replace('{{HITOKOTO_CONTENT}}', hitokotoContent)
+    .replace(/{{HITOKOTO_STYLE}}/g, hitokotoStyle)
     .replace('{{SITES_GRID}}', sitesGridMarkup)
     .replace('{{CURRENT_YEAR}}', new Date().getFullYear())
     .replace('grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6', gridClass)

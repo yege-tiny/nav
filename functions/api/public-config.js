@@ -20,7 +20,17 @@ export async function onRequestGet({ env }) {
     layout_hide_links: false,
     layout_hide_category: false,
     layout_hide_title: false,
+    home_title_size: '',
+    home_title_color: '',
     layout_hide_subtitle: false,
+    home_subtitle_size: '',
+    home_subtitle_color: '',
+    home_hide_stats: false,
+    home_stats_size: '',
+    home_stats_color: '',
+    home_hide_hitokoto: false,
+    home_hitokoto_size: '',
+    home_hitokoto_color: '',
     layout_grid_cols: '4',
     layout_custom_wallpaper: '',
     layout_menu_layout: 'horizontal',
@@ -31,14 +41,28 @@ export async function onRequestGet({ env }) {
   };
 
   try {
-    const { results } = await env.NAV_DB.prepare("SELECT key, value FROM settings WHERE key IN ('layout_hide_desc', 'layout_hide_links', 'layout_hide_category', 'layout_hide_title', 'layout_hide_subtitle', 'layout_grid_cols', 'layout_custom_wallpaper', 'layout_menu_layout', 'layout_enable_frosted_glass', 'layout_frosted_glass_intensity', 'layout_enable_bg_blur', 'layout_bg_blur_intensity')").all();
+    const keys = [
+      'layout_hide_desc', 'layout_hide_links', 'layout_hide_category', 'layout_hide_title', 'layout_hide_subtitle',
+      'layout_grid_cols', 'layout_custom_wallpaper', 'layout_menu_layout',
+      'layout_enable_frosted_glass', 'layout_frosted_glass_intensity',
+      'layout_enable_bg_blur', 'layout_bg_blur_intensity',
+      'home_title_size', 'home_title_color',
+      'home_subtitle_size', 'home_subtitle_color',
+      'home_hide_stats', 'home_stats_size', 'home_stats_color',
+      'home_hide_hitokoto', 'home_hitokoto_size', 'home_hitokoto_color'
+    ];
+    // Use dynamic placeholders
+    const placeholders = keys.map(() => '?').join(',');
+    const { results } = await env.NAV_DB.prepare(`SELECT key, value FROM settings WHERE key IN (${placeholders})`).bind(...keys).all();
+
     if (results) {
       results.forEach(row => {
-        // Store as boolean where appropriate, string for others
-        if (row.key === 'layout_grid_cols' || row.key === 'layout_custom_wallpaper' || row.key === 'layout_menu_layout' || row.key === 'layout_frosted_glass_intensity' || row.key === 'layout_bg_blur_intensity') {
-            layoutSettings[row.key] = row.value;
+        // Explicitly handle booleans
+        const boolKeys = ['layout_hide_desc', 'layout_hide_links', 'layout_hide_category', 'layout_hide_title', 'layout_hide_subtitle', 'layout_enable_frosted_glass', 'layout_enable_bg_blur', 'home_hide_stats', 'home_hide_hitokoto'];
+        if (boolKeys.includes(row.key)) {
+             layoutSettings[row.key] = row.value === 'true';
         } else {
-            layoutSettings[row.key] = row.value === 'true';
+             layoutSettings[row.key] = row.value;
         }
       });
     }

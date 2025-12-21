@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <strong>在线体验:</strong> <a href="https://nav.iori.de5.net">https://nav.iori.de5.net</a>
+  <strong>在线体验:</strong> <a href="https://nav.ior.gv.uy">https://nav.ior.gv.uy</a>
 </p>
 ---
 
@@ -21,12 +21,15 @@
 | 首页 | 后台管理 |
 | :---: | :---: |
 | ![首页预览](https://github.com/user-attachments/assets/b106be25-5be4-4ae6-98aa-e1fae38b5a3d) | ![后台预览](https://github.com/user-attachments/assets/49461d13-e48b-400d-b15c-3fa2d1a0460e) |
-| ![首页预览](https://github.com/user-attachments/assets/822c1188-4b70-4aed-b5f6-c4c233c55fb2) | ![后台预览](https://github.com/user-attachments/assets/4d3bb3f4-da65-400a-a41d-eeaecedb7197) |
+| ![首页预览](https://github.com/user-attachments/assets/4cb39e41-a7a5-46c7-876c-62021fa5611e) | ![后台预览](https://github.com/user-attachments/assets/4d3bb3f4-da65-400a-a41d-eeaecedb7197) |
 
 | 大卡片 | 小卡片 |
 | :---: | :---: |
 | ![首页预览](https://github.com/user-attachments/assets/e77d1c10-aba4-4755-8a62-416fe3a8239e) | ![后台预览](https://github.com/user-attachments/assets/b2508b55-bbf6-4998-a111-a7b75eb8686b) |
 
+| 简洁风格|
+| :---: |
+| ![首页预览](https://github.com/user-attachments/assets/3a70b18a-5301-4218-a75f-869fbbdaa7a4)||
 > 卡片的毛玻璃效果和程度可以在后台设置里自定义。后台设置页面为url后加 /admin
 ## ✨ 核心特性
 
@@ -40,6 +43,7 @@
 - 📤 **数据管理**：支持书签数据的导入与导出，格式兼容，方便迁移。
 
 ## 更新日志
+- 12-20 增加卡片风格设置，首页设置，允许自定义字体，字体大小，颜色，增加首页外部搜索开关
 - 12-19 增加360壁纸（速度较慢，轮询推荐bing），分类支持多级分类
 - 12-18 布局设置中增加卡片增加毛玻璃效果开关和滑动条设置，背景增加虚化开关和虚化程度设置
   

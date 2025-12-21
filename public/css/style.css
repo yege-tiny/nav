@@ -1,4 +1,9 @@
 /* 自定义滚动条 */
+:root {
+  --card-padding: 1.25rem; /* 20px, default p-5 */
+  --card-radius: 0.75rem;  /* 12px, default rounded-xl */
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -22,6 +27,14 @@
 .site-card {
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   will-change: transform;
+  border-radius: var(--card-radius);
+  width: 100%;
+  max-width: 350px;
+  margin: 0 auto;
+}
+
+.site-card-content {
+  padding: var(--card-padding);
 }
 
 .site-card:hover {
@@ -31,28 +44,89 @@
   border: 2px solid #416d9d;
 }
 
-/* 图标消失动画 */
-.site-icon {
+/* 风格一 (默认): 图标消失动画 */
+.site-card:not(.style-2) .site-icon {
   width: 2.5rem;
   margin-right: 1rem;
   opacity: 1;
 }
 
-.site-card:hover .site-icon {
+.site-card:not(.style-2):hover .site-icon {
   width: 0;
   margin-right: 0;
   opacity: 0;
   transition-delay: 0.1s;
 }
 
-/* 标题放大动画 */
-.site-title {
+/* 风格一 (默认): 标题放大动画 */
+.site-card:not(.style-2) .site-title {
   transform-origin: left center;
 }
 
-.site-card:hover .site-title {
+.site-card:not(.style-2):hover .site-title {
   transform: scale(1.2);
   transition-delay: 0.1s;
+}
+
+/* ========================================= */
+/* 风格二 (Style 2): 垂直布局 */
+/* ========================================= */
+.site-card.style-2 .flex.items-start {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.site-card.style-2 .site-icon {
+    margin-right: 0;
+    margin-bottom: 0.5rem;
+    width: 3rem; /* 稍大一点 */
+    height: 3rem;
+    transition: transform 0.3s ease;
+}
+
+.site-card.style-2:hover .site-icon {
+    transform: scale(1.1);
+}
+
+/* 图标居中显示 */
+.site-card.style-2 .site-icon img,
+.site-card.style-2 .site-icon div {
+    margin: 0 auto;
+}
+
+.site-card.style-2 .site-title {
+    text-align: center;
+    margin-bottom: 0.25rem;
+    display: block;
+    width: 100%;
+}
+
+/* 分类标签居中 */
+.site-card.style-2 .flex-1 {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.site-card.style-2 .inline-flex {
+    margin-top: 0.25rem;
+    margin-bottom: 0.5rem;
+}
+
+/* 描述两行居中 */
+.site-card.style-2 p {
+    text-align: center;
+    margin-top: 0.5rem;
+}
+
+/* 链接行 */
+.site-card.style-2 .mt-3.flex {
+    margin-top: 0.75rem;
+    justify-content: space-between; /* 保持左右分布，或者可以用 center */
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(0,0,0,0.05); /* 可选：加个分割线 */
 }
 
 /* 复制成功提示动画 */
@@ -92,10 +166,12 @@
 
 /* 多行文本截断 */
 .line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  word-break: break-word;
 }
 
 /* 侧边栏控制 */
@@ -137,6 +213,7 @@
   -webkit-backdrop-filter: blur(var(--frosted-glass-blur, 15px)) !important;
   border: 1px solid rgba(255, 255, 255, 0.4) !important;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05) !important;
+  /* border-radius already set by site-card */
 }
 
 .frosted-glass-effect:hover {
@@ -163,7 +240,7 @@
 }
 
 @media (max-width: 410px) {
-  .site-card .p-5 {
+  .site-card .site-card-content {
     padding: 0.75rem !important;
   }
 
@@ -477,4 +554,53 @@
 /* 调整悬停时的动画终点 */
 #horizontalMoreDropdown .menu-item-wrapper:hover > .dropdown-menu {
   transform: translateX(0) translateY(0);
+}
+
+/* ========================================= */
+/* 搜索引擎选项样式 */
+/* ========================================= */
+.search-engine-option {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.7;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9); /* 默认白色 */
+}
+
+.search-engine-option:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    opacity: 1;
+}
+
+.search-engine-option.active {
+    opacity: 1;
+    font-weight: 700;
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 自定义壁纸模式下的颜色 */
+.custom-wallpaper .search-engine-option {
+    color: #1f2937; /* gray-800 */
+    background-color: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(4px);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    opacity: 0.9;
+}
+
+.custom-wallpaper .search-engine-option:hover {
+    background-color: rgba(255, 255, 255, 0.8);
+    opacity: 1;
+}
+
+.custom-wallpaper .search-engine-option.active {
+    color: #2563eb; /* primary-600 */
+    background-color: rgba(255, 255, 255, 0.95);
+    font-weight: 600;
+    opacity: 1;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }

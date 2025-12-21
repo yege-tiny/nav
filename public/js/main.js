@@ -177,9 +177,50 @@ document.addEventListener('DOMContentLoaded', function() {
   // ========== 搜索功能 ==========
   const searchInputs = document.querySelectorAll('.search-input-target');
   const sitesGrid = document.getElementById('sitesGrid');
+  let currentSearchEngine = 'local'; // Default to local
+
+  // Search Engine Switching Logic
+  const engineOptions = document.querySelectorAll('.search-engine-option');
+  engineOptions.forEach(option => {
+      option.addEventListener('click', () => {
+          currentSearchEngine = option.dataset.engine;
+          
+          // Update UI: Sync all option sets (desktop/mobile)
+          const allOptions = document.querySelectorAll('.search-engine-option');
+          allOptions.forEach(opt => {
+              if (opt.dataset.engine === currentSearchEngine) {
+                  opt.classList.add('active');
+              } else {
+                  opt.classList.remove('active');
+              }
+          });
+          
+          // Update Placeholder
+          let placeholder = '搜索书签...';
+          switch (currentSearchEngine) {
+              case 'google': placeholder = 'Google 搜索...'; break;
+              case 'baidu': placeholder = '百度搜索...'; break;
+              case 'bing': placeholder = 'Bing 搜索...'; break;
+          }
+          
+          searchInputs.forEach(input => {
+              input.placeholder = placeholder;
+              input.focus();
+              // If switching back to local, trigger filter immediately
+              if (currentSearchEngine === 'local') {
+                  input.dispatchEvent(new Event('input'));
+              }
+          });
+      });
+  });
   
   searchInputs.forEach(input => {
+    // Local Search Input Handler
     input.addEventListener('input', function() {
+        // If external engine is selected, do not filter local sites (optional, but better UX)
+        // But keeping it might be confusing. Let's filter only if local.
+        if (currentSearchEngine !== 'local') return;
+
         const keyword = this.value.toLowerCase().trim();
         // Sync other inputs
         searchInputs.forEach(otherInput => {
@@ -203,6 +244,23 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         updateHeading(keyword);
+    });
+
+    // External Search Enter Handler
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && currentSearchEngine !== 'local') {
+            e.preventDefault();
+            const query = this.value.trim();
+            if (query) {
+                let url = '';
+                switch (currentSearchEngine) {
+                    case 'google': url = `https://www.google.com/search?q=${encodeURIComponent(query)}`; break;
+                    case 'baidu': url = `https://www.baidu.com/s?wd=${encodeURIComponent(query)}`; break;
+                    case 'bing': url = `https://www.bing.com/search?q=${encodeURIComponent(query)}`; break;
+                }
+                if (url) window.open(url, '_blank');
+            }
+        }
     });
   });
   
@@ -235,16 +293,26 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   // ========== 一言 API ==========
-  fetch('https://v1.hitokoto.cn')
-    .then(res => res.json())
-    .then(data => {
-      const hitokoto = document.getElementById('hitokoto_text');
-      if (hitokoto) {
-        hitokoto.href = `https://hitokoto.cn/?uuid=${data.uuid}`;
-        hitokoto.innerText = data.hitokoto;
-      }
-    })
-    .catch(console.error);
+  const hitokotoContainer = document.querySelector('#hitokoto').parentElement;
+  console.log('[Debug] hitokotoContainer:', hitokotoContainer);
+  if (hitokotoContainer) {
+      console.log('[Debug] hitokotoContainer.classList:', hitokotoContainer.classList);
+      console.log('[Debug] contains hidden?', hitokotoContainer.classList.contains('hidden'));
+  }
+  // 检查容器是否被隐藏，如果隐藏则不发起请求
+  if (hitokotoContainer && !hitokotoContainer.classList.contains('hidden')) {
+    console.log('[Debug] Fetching hitokoto...');
+    fetch('https://v1.hitokoto.cn')
+      .then(res => res.json())
+      .then(data => {
+        const hitokoto = document.getElementById('hitokoto_text');
+        if (hitokoto) {
+          hitokoto.href = `https://hitokoto.cn/?uuid=${data.uuid}`;
+          hitokoto.innerText = data.hitokoto;
+        }
+      })
+      .catch(console.error);
+  }
 
   // ========== Horizontal Menu Overflow Logic ==========
   const navContainer = document.getElementById('horizontalCategoryNav');
@@ -452,17 +520,21 @@ document.addEventListener('DOMContentLoaded', function() {
       const sitesGrid = document.getElementById('sitesGrid');
       if (!sitesGrid) return;
       
-      // 改用 CSS 变量检测毛玻璃效果是否开启
-      const computedStyle = getComputedStyle(document.documentElement);
-      const frostedBlurVal = computedStyle.getPropertyValue('--frosted-glass-blur').trim();
-      const isFrostedEnabled = frostedBlurVal !== '';
-      
       // 使用全局配置获取布局设置，避免依赖 DOM 推断
       const config = window.IORI_LAYOUT_CONFIG || {};
       const isFiveCols = config.gridCols === '5';
+      const isSixCols = config.gridCols === '6';
       const hideDesc = config.hideDesc === true;
       const hideLinks = config.hideLinks === true;
       const hideCategory = config.hideCategory === true;
+      const cardStyle = config.cardStyle || 'style1';
+      
+      // 优先从配置获取毛玻璃开关状态，CSS 变量作为回退
+      const computedStyle = getComputedStyle(document.documentElement);
+      const frostedBlurVal = computedStyle.getPropertyValue('--frosted-glass-blur').trim();
+      const isFrostedEnabled = config.enableFrostedGlass !== undefined 
+          ? config.enableFrostedGlass 
+          : (frostedBlurVal !== '');
       
       sitesGrid.innerHTML = '';
       
@@ -492,10 +564,10 @@ document.addEventListener('DOMContentLoaded', function() {
           <div class="mt-3 flex items-center justify-between">
             <span class="text-xs text-primary-600 truncate max-w-[140px]" title="${safeUrl}">${safeUrl || '未提供链接'}</span>
             <button class="copy-btn relative flex items-center px-2 py-1 ${hasValidUrl ? 'bg-accent-100 text-accent-700 hover:bg-accent-200' : 'bg-gray-200 text-gray-400 cursor-not-allowed'} rounded-full text-xs font-medium transition-colors" data-url="${safeUrl}" ${hasValidUrl ? '' : 'disabled'}>
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ${isFiveCols ? '' : 'mr-1'}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ${isFiveCols || isSixCols ? '' : 'mr-1'}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
               </svg>
-              ${isFiveCols ? '' : '<span class="copy-text">复制</span>'}
+              ${isFiveCols || isSixCols ? '' : '<span class="copy-text">复制</span>'}
               <span class="copy-success hidden absolute -top-8 right-0 bg-accent-500 text-white text-xs px-2 py-1 rounded shadow-md">已复制!</span>
             </button>
           </div>`;
@@ -506,12 +578,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 </span>`;
         
         const frostedClass = isFrostedEnabled ? 'frosted-glass-effect' : '';
+        const cardStyleClass = cardStyle === 'style2' ? 'style-2' : '';
         const baseCardClass = isFrostedEnabled
-            ? 'site-card group rounded-xl overflow-hidden transition-all' 
-            : 'site-card group bg-white border border-primary-100/60 rounded-xl shadow-sm overflow-hidden';
+            ? 'site-card group overflow-hidden transition-all' 
+            : 'site-card group bg-white border border-primary-100/60 shadow-sm overflow-hidden';
         
         const card = document.createElement('div');
-        card.className = `${baseCardClass} ${frostedClass} card-anim-enter`;
+        card.className = `${baseCardClass} ${frostedClass} ${cardStyleClass} card-anim-enter`;
         const delay = Math.min(index, 20) * 30;
         if (delay > 0) {
             card.style.animationDelay = `${delay}ms`;
@@ -534,7 +607,7 @@ document.addEventListener('DOMContentLoaded', function() {
         card.setAttribute('data-catalog', safeCatalog);
         
         card.innerHTML = `
-        <div class="p-5">
+        <div class="site-card-content">
           <a href="${safeUrl}" ${hasValidUrl ? 'target="_blank" rel="noopener noreferrer"' : ''} class="block">
             <div class="flex items-start">
               <div class="site-icon flex-shrink-0 mr-4 transition-all duration-300">

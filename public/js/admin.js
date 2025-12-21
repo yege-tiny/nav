@@ -1769,8 +1769,8 @@ const initSettings = () => {
   const hideDescSwitch = document.getElementById('hideDescSwitch');
   const hideLinksSwitch = document.getElementById('hideLinksSwitch');
   const hideCategorySwitch = document.getElementById('hideCategorySwitch');
-  const hideTitleSwitch = document.getElementById('hideTitleSwitch');
-  const hideSubtitleSwitch = document.getElementById('hideSubtitleSwitch');
+  const hideGithubSwitch = document.getElementById('hideGithubSwitch');
+  const hideAdminSwitch = document.getElementById('hideAdminSwitch');
   const frostedGlassSwitch = document.getElementById('frostedGlassSwitch');
   const frostedGlassIntensityRange = document.getElementById('frostedGlassIntensity');
   const frostedGlassIntensityValue = document.getElementById('frostedGlassIntensityValue');
@@ -1786,6 +1786,269 @@ const initSettings = () => {
   const wpSourceBingBtn = document.getElementById('wpSourceBing');
   const wpSource360Btn = document.getElementById('wpSource360');
   const category360Select = document.getElementById('category360');
+
+  // Card Style Elements
+  const cardStyle1Container = document.getElementById('cardStyle1Container');
+  const cardStyle2Container = document.getElementById('cardStyle2Container');
+  const cardStyle1Check = document.getElementById('cardStyle1Check');
+  const cardStyle2Check = document.getElementById('cardStyle2Check');
+  const cardStyle1Preview = document.getElementById('cardStyle1Preview');
+  const cardStyle2Preview = document.getElementById('cardStyle2Preview');
+  const cardStyle1PreviewContainer = document.getElementById('cardStyle1PreviewContainer');
+  const cardStyle2PreviewContainer = document.getElementById('cardStyle2PreviewContainer');
+  
+  const cardRadiusInput = document.getElementById('cardRadius');
+  const cardRadiusValue = document.getElementById('cardRadiusValue');
+
+  // Home Settings Inputs
+  const hideTitleSwitch = document.getElementById('hideTitleSwitch');
+  const homeTitleSizeInput = document.getElementById('homeTitleSize');
+  const homeTitleColorInput = document.getElementById('homeTitleColor');
+  const homeTitleColorPicker = document.getElementById('homeTitleColorPicker');
+
+  const hideSubtitleSwitch = document.getElementById('hideSubtitleSwitch');
+  const homeSubtitleSizeInput = document.getElementById('homeSubtitleSize');
+  const homeSubtitleColorInput = document.getElementById('homeSubtitleColor');
+  const homeSubtitleColorPicker = document.getElementById('homeSubtitleColorPicker');
+
+  const hideStatsSwitch = document.getElementById('hideStatsSwitch');
+  const homeStatsSizeInput = document.getElementById('homeStatsSize');
+  const homeStatsColorInput = document.getElementById('homeStatsColor');
+  const homeStatsColorPicker = document.getElementById('homeStatsColorPicker');
+
+  const hideHitokotoSwitch = document.getElementById('hideHitokotoSwitch');
+  const homeHitokotoSizeInput = document.getElementById('homeHitokotoSize');
+  const homeHitokotoColorInput = document.getElementById('homeHitokotoColor');
+  const homeHitokotoColorPicker = document.getElementById('homeHitokotoColorPicker');
+
+  // New Card Font Elements
+  const cardTitleFontInput = document.getElementById('cardTitleFont');
+  const cardTitleSizeInput = document.getElementById('cardTitleSize');
+  const cardTitleColorInput = document.getElementById('cardTitleColor');
+  const cardTitleColorPicker = document.getElementById('cardTitleColorPicker');
+  const cardDescFontInput = document.getElementById('cardDescFont');
+  const cardDescSizeInput = document.getElementById('cardDescSize');
+  const cardDescColorInput = document.getElementById('cardDescColor');
+  const cardDescColorPicker = document.getElementById('cardDescColorPicker');
+
+  const homeTitleFontInput = document.getElementById('homeTitleFont');
+  const homeSubtitleFontInput = document.getElementById('homeSubtitleFont');
+  const homeStatsFontInput = document.getElementById('homeStatsFont');
+  const homeHitokotoFontInput = document.getElementById('homeHitokotoFont');
+
+  const homeSiteNameInput = document.getElementById('homeSiteName');
+  const homeSiteDescriptionInput = document.getElementById('homeSiteDescription');
+
+  const searchEngineSwitch = document.getElementById('searchEngineSwitch');
+
+  // Font Options
+  const FONT_OPTIONS = [
+      { value: "", label: "默认字体" },
+      { value: "sans-serif", label: "Sans Serif (通用无衬线)" },
+      { value: "serif", label: "Serif (通用衬线)" },
+      { value: "monospace", label: "Monospace (通用等宽)" },
+      { value: "'Microsoft YaHei', sans-serif", label: "微软雅黑 (Windows)" },
+      { value: "'SimSun', serif", label: "宋体 (Windows)" },
+      { value: "'PingFang SC', sans-serif", label: "苹方 (Mac)" },
+      { value: "'Segoe UI', sans-serif", label: "Segoe UI (Windows)" },
+      { value: "'Noto Sans SC', sans-serif", label: "Noto Sans SC (Web)" },
+      { value: "'Noto Serif SC', serif", label: "Noto Serif SC (Web)" },
+      { value: "'Ma Shan Zheng', cursive", label: "马善政毛笔 (Web)" },
+      { value: "'ZCOOL KuaiLe', cursive", label: "站酷快乐体 (Web)" },
+      { value: "'Long Cang', cursive", label: "龙苍草书 (Web)" },
+      { value: "'Roboto', sans-serif", label: "Roboto (Web)" },
+      { value: "'Open Sans', sans-serif", label: "Open Sans (Web)" },
+      { value: "'Lato', sans-serif", label: "Lato (Web)" },
+      { value: "'Montserrat', sans-serif", label: "Montserrat (Web)" }
+  ];
+
+  const FONT_URL_MAP = {
+      "'Noto Sans SC', sans-serif": "https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap",
+      "'Noto Serif SC', serif": "https://fonts.loli.net/css2?family=Noto+Serif+SC:wght@400;700&display=swap",
+      "'Ma Shan Zheng', cursive": "https://fonts.loli.net/css2?family=Ma+Shan+Zheng&display=swap",
+      "'ZCOOL KuaiLe', cursive": "https://fonts.loli.net/css2?family=ZCOOL+KuaiLe&display=swap",
+      "'Long Cang', cursive": "https://fonts.loli.net/css2?family=Long+Cang&display=swap",
+      "'Roboto', sans-serif": "https://fonts.loli.net/css2?family=Roboto:wght@300;400;500;700&display=swap",
+      "'Open Sans', sans-serif": "https://fonts.loli.net/css2?family=Open+Sans:wght@400;600;700&display=swap",
+      "'Lato', sans-serif": "https://fonts.loli.net/css2?family=Lato:wght@400;700&display=swap",
+      "'Montserrat', sans-serif": "https://fonts.loli.net/css2?family=Montserrat:wght@400;700&display=swap"
+  };
+
+  const loadedFonts = new Set();
+  function loadFont(fontFamily) {
+      if (!fontFamily || loadedFonts.has(fontFamily)) return;
+      const url = FONT_URL_MAP[fontFamily];
+      if (url) {
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = url;
+          document.head.appendChild(link);
+          loadedFonts.add(fontFamily);
+      }
+  }
+
+  function populateFontSelects() {
+      const selects = [homeTitleFontInput, homeSubtitleFontInput, homeStatsFontInput, homeHitokotoFontInput, cardTitleFontInput, cardDescFontInput];
+      selects.forEach(select => {
+          if (!select) return;
+          select.innerHTML = '';
+          FONT_OPTIONS.forEach(opt => {
+              const option = document.createElement('option');
+              option.value = opt.value;
+              option.textContent = opt.label;
+              select.appendChild(option);
+          });
+      });
+  }
+  populateFontSelects();
+
+  // Preview Logic
+  function updatePreviewCards() {
+      const hideDesc = hideDescSwitch.checked;
+      const hideLinks = hideLinksSwitch.checked;
+      const hideCategory = hideCategorySwitch.checked;
+      const enableFrosted = frostedGlassSwitch.checked;
+      const frostedIntensity = frostedGlassIntensityRange.value;
+      const radius = document.getElementById('cardRadius').value;
+      
+      const titleFont = cardTitleFontInput.value;
+      const titleSize = cardTitleSizeInput.value;
+      const titleColor = cardTitleColorInput.value;
+      
+      const descFont = cardDescFontInput.value;
+      const descSize = cardDescSizeInput.value;
+      const descColor = cardDescColorInput.value;
+      
+      // Load fonts for preview
+      if (titleFont) loadFont(titleFont);
+      if (descFont) loadFont(descFont);
+
+      [cardStyle1Preview, cardStyle2Preview].forEach(card => {
+          if (!card) return;
+          
+          // Apply dynamic styles
+          card.style.setProperty('--card-radius', radius + 'px');
+          
+          const desc = card.querySelector('.preview-desc');
+          const links = card.querySelector('.preview-links');
+          const category = card.querySelector('.preview-category');
+          const title = card.querySelector('.site-title');
+
+          if (title) {
+              if (titleFont) title.style.fontFamily = titleFont; else title.style.removeProperty('font-family');
+              if (titleSize) title.style.fontSize = titleSize + 'px'; else title.style.removeProperty('font-size');
+              if (titleColor) title.style.color = titleColor; else title.style.removeProperty('color');
+          }
+
+          if (desc) {
+              if (hideDesc) {
+                  desc.style.setProperty('display', 'none', 'important');
+              } else {
+                  desc.style.removeProperty('display');
+              }
+              
+              if (descFont) desc.style.fontFamily = descFont; else desc.style.removeProperty('font-family');
+              if (descSize) desc.style.fontSize = descSize + 'px'; else desc.style.removeProperty('font-size');
+              if (descColor) desc.style.color = descColor; else desc.style.removeProperty('color');
+          }
+          if (links) links.style.display = hideLinks ? 'none' : 'flex'; 
+          if (category) category.style.display = hideCategory ? 'none' : 'inline-flex';
+          
+          if (enableFrosted) {
+              card.classList.add('frosted-glass-effect');
+              card.style.setProperty('--frosted-glass-blur', frostedIntensity + 'px');
+              card.classList.remove('bg-white'); 
+          } else {
+              card.classList.remove('frosted-glass-effect');
+              card.style.removeProperty('--frosted-glass-blur');
+              card.classList.add('bg-white');
+          }
+      });
+  }
+
+  function updatePreviewWidth() {
+      let cols = '4';
+      if (gridColsRadios) {
+          for (const radio of gridColsRadios) {
+              if (radio.checked) {
+                  cols = radio.value;
+                  break;
+              }
+          }
+      }
+      
+      const widthMap = {
+          '4': '280px',
+          '5': '230px',
+          '6': '190px',
+          '7': '160px'
+      };
+      const width = widthMap[cols] || '280px';
+      
+      if (cardStyle1PreviewContainer) cardStyle1PreviewContainer.style.maxWidth = width;
+      if (cardStyle2PreviewContainer) cardStyle2PreviewContainer.style.maxWidth = width;
+  }
+
+  if (gridColsRadios) {
+      for (const radio of gridColsRadios) {
+          radio.addEventListener('change', updatePreviewWidth);
+      }
+  }
+
+  // Card Style Selection Logic
+  function selectCardStyle(style) {
+      currentSettings.layout_card_style = style;
+      
+      const btn1 = document.getElementById('btnStyle1');
+      const btn2 = document.getElementById('btnStyle2');
+      const preview1 = document.getElementById('cardStyle1PreviewContainer');
+      const preview2 = document.getElementById('cardStyle2PreviewContainer');
+
+      if (!btn1 || !btn2 || !preview1 || !preview2) return;
+
+      // Reset
+      btn1.className = 'card-style-btn px-4 py-1 text-sm rounded transition-all';
+      btn2.className = 'card-style-btn px-4 py-1 text-sm rounded transition-all';
+      
+      if (style === 'style2') {
+          btn2.classList.add('bg-white', 'shadow-sm', 'text-gray-800', 'font-medium');
+          btn1.classList.add('text-gray-600', 'hover:text-gray-900');
+          preview1.classList.add('hidden');
+          preview2.classList.remove('hidden');
+      } else {
+          btn1.classList.add('bg-white', 'shadow-sm', 'text-gray-800', 'font-medium');
+          btn2.classList.add('text-gray-600', 'hover:text-gray-900');
+          preview1.classList.remove('hidden');
+          preview2.classList.add('hidden');
+      }
+  }
+
+  const btnStyle1 = document.getElementById('btnStyle1');
+  const btnStyle2 = document.getElementById('btnStyle2');
+  if (btnStyle1) btnStyle1.addEventListener('click', () => selectCardStyle('style1'));
+  if (btnStyle2) btnStyle2.addEventListener('click', () => selectCardStyle('style2'));
+
+  // Switch Listeners for Preview
+  if (hideDescSwitch) hideDescSwitch.addEventListener('change', updatePreviewCards);
+  if (hideLinksSwitch) hideLinksSwitch.addEventListener('change', updatePreviewCards);
+  if (hideCategorySwitch) hideCategorySwitch.addEventListener('change', updatePreviewCards);
+  if (frostedGlassSwitch) frostedGlassSwitch.addEventListener('change', updatePreviewCards);
+  if (frostedGlassIntensityRange) frostedGlassIntensityRange.addEventListener('input', updatePreviewCards);
+  
+  if (cardRadiusInput) {
+      cardRadiusInput.addEventListener('input', () => {
+          if (cardRadiusValue) cardRadiusValue.textContent = cardRadiusInput.value;
+          updatePreviewCards();
+      });
+  }
+  
+  // Real-time Card Font Preview Listeners
+  [cardTitleFontInput, cardTitleSizeInput, cardTitleColorInput, cardDescFontInput, cardDescSizeInput, cardDescColorInput].forEach(input => {
+      if (input) {
+          input.addEventListener('input', updatePreviewCards);
+          input.addEventListener('change', updatePreviewCards);
+      }
+  });
 
   // AI Provider Elements
   const providerSelector = document.getElementById('providerSelector');
@@ -1815,7 +2078,24 @@ const initSettings = () => {
     layout_hide_links: false,
     layout_hide_category: false,
     layout_hide_title: false,
+    home_title_size: '',
+    home_title_color: '',
     layout_hide_subtitle: false,
+    home_subtitle_size: '',
+    home_subtitle_color: '',
+    home_hide_stats: false,
+    home_stats_size: '',
+    home_stats_color: '',
+    home_hide_hitokoto: false,
+    home_hitokoto_size: '',
+    home_hitokoto_color: '',
+    home_search_engine_enabled: false,
+    home_title_font: '',
+    home_subtitle_font: '',
+    home_stats_font: '',
+    home_hitokoto_font: '',
+    home_site_name: '',
+    home_site_description: '',
     layout_enable_frosted_glass: false,
     layout_frosted_glass_intensity: '15',
     layout_grid_cols: '4',
@@ -1826,7 +2106,9 @@ const initSettings = () => {
     layout_bg_blur_intensity: '0',
     bing_country: '',
     wallpaper_source: 'bing',
-    wallpaper_cid_360: '36'
+    wallpaper_cid_360: '36',
+    layout_card_style: 'style1',
+    layout_card_border_radius: '12'
   };
 
   let shouldStopBulkGeneration = false;
@@ -1848,6 +2130,35 @@ const initSettings = () => {
     }
   }
   fetchPublicConfig();
+
+  // Color Picker Sync Helper
+  function setupColorPicker(textInput, pickerInput) {
+    if (!textInput || !pickerInput) return;
+    
+    // Init picker from text if valid hex
+    if (/^#[0-9A-F]{6}$/i.test(textInput.value)) {
+        pickerInput.value = textInput.value;
+    }
+
+    pickerInput.addEventListener('input', () => {
+        textInput.value = pickerInput.value;
+    });
+
+    textInput.addEventListener('input', () => {
+        const val = textInput.value;
+        if (/^#[0-9A-F]{6}$/i.test(val)) {
+            pickerInput.value = val;
+        }
+    });
+  }
+
+  setupColorPicker(homeTitleColorInput, homeTitleColorPicker);
+  setupColorPicker(homeSubtitleColorInput, homeSubtitleColorPicker);
+  setupColorPicker(homeStatsColorInput, homeStatsColorPicker);
+  setupColorPicker(homeHitokotoColorInput, homeHitokotoColorPicker);
+  setupColorPicker(cardTitleColorInput, cardTitleColorPicker);
+  setupColorPicker(cardDescColorInput, cardDescColorPicker);
+
 
   // --- Online Wallpaper Logic ---
 
@@ -2181,8 +2492,35 @@ const initSettings = () => {
     currentSettings.layout_hide_desc = hideDescSwitch.checked;
     currentSettings.layout_hide_links = hideLinksSwitch.checked;
     currentSettings.layout_hide_category = hideCategorySwitch.checked;
+    currentSettings.home_hide_github = hideGithubSwitch.checked;
+    currentSettings.home_hide_admin = hideAdminSwitch.checked;
+    
     currentSettings.layout_hide_title = hideTitleSwitch.checked;
+    currentSettings.home_title_size = homeTitleSizeInput.value.trim();
+    currentSettings.home_title_color = homeTitleColorInput.value.trim();
+
     currentSettings.layout_hide_subtitle = hideSubtitleSwitch.checked;
+    currentSettings.home_subtitle_size = homeSubtitleSizeInput.value.trim();
+    currentSettings.home_subtitle_color = homeSubtitleColorInput.value.trim();
+
+    currentSettings.home_hide_stats = hideStatsSwitch.checked;
+    currentSettings.home_stats_size = homeStatsSizeInput.value.trim();
+    currentSettings.home_stats_color = homeStatsColorInput.value.trim();
+
+    currentSettings.home_hide_hitokoto = hideHitokotoSwitch.checked;
+    currentSettings.home_hitokoto_size = homeHitokotoSizeInput.value.trim();
+    currentSettings.home_hitokoto_color = homeHitokotoColorInput.value.trim();
+
+    currentSettings.home_title_font = homeTitleFontInput.value.trim();
+    currentSettings.home_subtitle_font = homeSubtitleFontInput.value.trim();
+    currentSettings.home_stats_font = homeStatsFontInput.value.trim();
+    currentSettings.home_hitokoto_font = homeHitokotoFontInput.value.trim();
+
+    currentSettings.home_site_name = homeSiteNameInput.value.trim();
+    currentSettings.home_site_description = homeSiteDescriptionInput.value.trim();
+
+    currentSettings.home_search_engine_enabled = searchEngineSwitch.checked;
+
     currentSettings.layout_custom_wallpaper = customWallpaperInput.value.trim();
     currentSettings.layout_random_wallpaper = randomWallpaperSwitch.checked;
     currentSettings.layout_enable_bg_blur = bgBlurSwitch.checked;
@@ -2208,6 +2546,17 @@ const initSettings = () => {
     
     currentSettings.layout_enable_frosted_glass = frostedGlassSwitch.checked;
     currentSettings.layout_frosted_glass_intensity = frostedGlassIntensityRange.value;
+    
+    currentSettings.layout_card_border_radius = cardRadiusInput.value;
+    
+    // layout_card_style is already updated by click listeners
+    
+    currentSettings.card_title_font = cardTitleFontInput.value.trim();
+    currentSettings.card_title_size = cardTitleSizeInput.value.trim();
+    currentSettings.card_title_color = cardTitleColorInput.value.trim();
+    currentSettings.card_desc_font = cardDescFontInput.value.trim();
+    currentSettings.card_desc_size = cardDescSizeInput.value.trim();
+    currentSettings.card_desc_color = cardDescColorInput.value.trim();
 
     saveSettings();
   });
@@ -2277,7 +2626,34 @@ const initSettings = () => {
             if (serverSettings.layout_hide_links !== undefined) currentSettings.layout_hide_links = serverSettings.layout_hide_links === 'true';
             if (serverSettings.layout_hide_category !== undefined) currentSettings.layout_hide_category = serverSettings.layout_hide_category === 'true';
             if (serverSettings.layout_hide_title !== undefined) currentSettings.layout_hide_title = serverSettings.layout_hide_title === 'true';
+            if (serverSettings.home_title_size) currentSettings.home_title_size = serverSettings.home_title_size;
+            if (serverSettings.home_title_color) currentSettings.home_title_color = serverSettings.home_title_color;
+
             if (serverSettings.layout_hide_subtitle !== undefined) currentSettings.layout_hide_subtitle = serverSettings.layout_hide_subtitle === 'true';
+            if (serverSettings.home_subtitle_size) currentSettings.home_subtitle_size = serverSettings.home_subtitle_size;
+            if (serverSettings.home_subtitle_color) currentSettings.home_subtitle_color = serverSettings.home_subtitle_color;
+
+            if (serverSettings.home_hide_stats !== undefined) currentSettings.home_hide_stats = serverSettings.home_hide_stats === 'true';
+            if (serverSettings.home_stats_size) currentSettings.home_stats_size = serverSettings.home_stats_size;
+            if (serverSettings.home_stats_color) currentSettings.home_stats_color = serverSettings.home_stats_color;
+
+            if (serverSettings.home_hide_hitokoto !== undefined) currentSettings.home_hide_hitokoto = serverSettings.home_hide_hitokoto === 'true';
+            if (serverSettings.home_hitokoto_size) currentSettings.home_hitokoto_size = serverSettings.home_hitokoto_size;
+            if (serverSettings.home_hitokoto_color) currentSettings.home_hitokoto_color = serverSettings.home_hitokoto_color;
+            
+            if (serverSettings.home_hide_github !== undefined) currentSettings.home_hide_github = serverSettings.home_hide_github === 'true';
+            if (serverSettings.home_hide_admin !== undefined) currentSettings.home_hide_admin = serverSettings.home_hide_admin === 'true';
+
+            if (serverSettings.home_title_font) currentSettings.home_title_font = serverSettings.home_title_font;
+            if (serverSettings.home_subtitle_font) currentSettings.home_subtitle_font = serverSettings.home_subtitle_font;
+            if (serverSettings.home_stats_font) currentSettings.home_stats_font = serverSettings.home_stats_font;
+            if (serverSettings.home_hitokoto_font) currentSettings.home_hitokoto_font = serverSettings.home_hitokoto_font;
+
+            if (serverSettings.home_site_name) currentSettings.home_site_name = serverSettings.home_site_name;
+            if (serverSettings.home_site_description) currentSettings.home_site_description = serverSettings.home_site_description;
+
+            if (serverSettings.home_search_engine_enabled !== undefined) currentSettings.home_search_engine_enabled = serverSettings.home_search_engine_enabled === 'true';
+
             if (serverSettings.layout_enable_frosted_glass !== undefined) currentSettings.layout_enable_frosted_glass = serverSettings.layout_enable_frosted_glass === 'true';
             if (serverSettings.layout_frosted_glass_intensity) currentSettings.layout_frosted_glass_intensity = serverSettings.layout_frosted_glass_intensity;
             if (serverSettings.layout_grid_cols) currentSettings.layout_grid_cols = serverSettings.layout_grid_cols;
@@ -2289,6 +2665,15 @@ const initSettings = () => {
             if (serverSettings.bing_country !== undefined) currentSettings.bing_country = serverSettings.bing_country;
             if (serverSettings.wallpaper_source) currentSettings.wallpaper_source = serverSettings.wallpaper_source;
             if (serverSettings.wallpaper_cid_360) currentSettings.wallpaper_cid_360 = serverSettings.wallpaper_cid_360;
+            if (serverSettings.layout_card_style) currentSettings.layout_card_style = serverSettings.layout_card_style;
+            if (serverSettings.layout_card_border_radius) currentSettings.layout_card_border_radius = serverSettings.layout_card_border_radius;
+
+            if (serverSettings.card_title_font) currentSettings.card_title_font = serverSettings.card_title_font;
+            if (serverSettings.card_title_size) currentSettings.card_title_size = serverSettings.card_title_size;
+            if (serverSettings.card_title_color) currentSettings.card_title_color = serverSettings.card_title_color;
+            if (serverSettings.card_desc_font) currentSettings.card_desc_font = serverSettings.card_desc_font;
+            if (serverSettings.card_desc_size) currentSettings.card_desc_size = serverSettings.card_desc_size;
+            if (serverSettings.card_desc_color) currentSettings.card_desc_color = serverSettings.card_desc_color;
 
         } else {
             // Fallback to localStorage if server has no data (migration)
@@ -2385,8 +2770,59 @@ const initSettings = () => {
     if (hideDescSwitch) hideDescSwitch.checked = !!currentSettings.layout_hide_desc;
     if (hideLinksSwitch) hideLinksSwitch.checked = !!currentSettings.layout_hide_links;
     if (hideCategorySwitch) hideCategorySwitch.checked = !!currentSettings.layout_hide_category;
+    if (hideGithubSwitch) hideGithubSwitch.checked = !!currentSettings.home_hide_github;
+    if (hideAdminSwitch) hideAdminSwitch.checked = !!currentSettings.home_hide_admin;
+    
     if (hideTitleSwitch) hideTitleSwitch.checked = !!currentSettings.layout_hide_title;
+    if (homeTitleSizeInput) homeTitleSizeInput.value = currentSettings.home_title_size || '36';
+    if (homeTitleColorInput) {
+        const val = currentSettings.home_title_color || '#ffffff';
+        homeTitleColorInput.value = val;
+        if (homeTitleColorPicker && /^#[0-9A-F]{6}$/i.test(val)) {
+            homeTitleColorPicker.value = val;
+        }
+    }
+
     if (hideSubtitleSwitch) hideSubtitleSwitch.checked = !!currentSettings.layout_hide_subtitle;
+    if (homeSubtitleSizeInput) homeSubtitleSizeInput.value = currentSettings.home_subtitle_size || '16';
+    if (homeSubtitleColorInput) {
+        const val = currentSettings.home_subtitle_color || '#e1e7f1';
+        homeSubtitleColorInput.value = val;
+         if (homeSubtitleColorPicker && /^#[0-9A-F]{6}$/i.test(val)) {
+            homeSubtitleColorPicker.value = val;
+        }
+    }
+
+    if (hideStatsSwitch) hideStatsSwitch.checked = !!currentSettings.home_hide_stats;
+    if (homeStatsSizeInput) homeStatsSizeInput.value = currentSettings.home_stats_size || '20';
+    if (homeStatsColorInput) {
+        const val = currentSettings.home_stats_color || '#1f2937';
+        homeStatsColorInput.value = val;
+        if (homeStatsColorPicker && /^#[0-9A-F]{6}$/i.test(val)) {
+            homeStatsColorPicker.value = val;
+        }
+    }
+
+    if (hideHitokotoSwitch) hideHitokotoSwitch.checked = !!currentSettings.home_hide_hitokoto;
+    if (homeHitokotoSizeInput) homeHitokotoSizeInput.value = currentSettings.home_hitokoto_size || '14';
+    if (homeHitokotoColorInput) {
+        const val = currentSettings.home_hitokoto_color || '#6b7280';
+        homeHitokotoColorInput.value = val;
+        if (homeHitokotoColorPicker && /^#[0-9A-F]{6}$/i.test(val)) {
+            homeHitokotoColorPicker.value = val;
+        }
+    }
+
+    if (homeTitleFontInput) homeTitleFontInput.value = currentSettings.home_title_font || '';
+    if (homeSubtitleFontInput) homeSubtitleFontInput.value = currentSettings.home_subtitle_font || '';
+    if (homeStatsFontInput) homeStatsFontInput.value = currentSettings.home_stats_font || '';
+    if (homeHitokotoFontInput) homeHitokotoFontInput.value = currentSettings.home_hitokoto_font || '';
+
+    if (homeSiteNameInput) homeSiteNameInput.value = currentSettings.home_site_name || '';
+    if (homeSiteDescriptionInput) homeSiteDescriptionInput.value = currentSettings.home_site_description || '';
+
+    if (searchEngineSwitch) searchEngineSwitch.checked = !!currentSettings.home_search_engine_enabled;
+
     if (frostedGlassSwitch) frostedGlassSwitch.checked = !!currentSettings.layout_enable_frosted_glass;
     if (frostedGlassIntensityRange) frostedGlassIntensityRange.value = currentSettings.layout_frosted_glass_intensity || '15';
     if (frostedGlassIntensityValue) frostedGlassIntensityValue.textContent = currentSettings.layout_frosted_glass_intensity || '15';
@@ -2435,6 +2871,43 @@ const initSettings = () => {
             }
         }
     }
+    
+    if (cardRadiusInput) {
+        cardRadiusInput.value = currentSettings.layout_card_border_radius || '12';
+        if (cardRadiusValue) cardRadiusValue.textContent = currentSettings.layout_card_border_radius || '12';
+    }
+
+    if (cardTitleFontInput) cardTitleFontInput.value = currentSettings.card_title_font || '';
+    if (cardTitleSizeInput) cardTitleSizeInput.value = currentSettings.card_title_size || '16';
+    if (cardTitleColorInput) {
+        const val = currentSettings.card_title_color || '#111827';
+        cardTitleColorInput.value = val;
+        if (cardTitleColorPicker && /^#[0-9A-F]{6}$/i.test(val)) {
+            cardTitleColorPicker.value = val;
+        }
+    }
+
+    if (cardDescFontInput) cardDescFontInput.value = currentSettings.card_desc_font || '';
+    if (cardDescSizeInput) cardDescSizeInput.value = currentSettings.card_desc_size || '14';
+    if (cardDescColorInput) {
+        cardDescColorInput.value = currentSettings.card_desc_color || '';
+        if (cardDescColorPicker && /^#[0-9A-F]{6}$/i.test(currentSettings.card_desc_color)) {
+            cardDescColorPicker.value = currentSettings.card_desc_color;
+        }
+    }
+    
+    // Load Fonts
+    if (currentSettings.home_title_font) loadFont(currentSettings.home_title_font);
+    if (currentSettings.home_subtitle_font) loadFont(currentSettings.home_subtitle_font);
+    if (currentSettings.home_stats_font) loadFont(currentSettings.home_stats_font);
+    if (currentSettings.home_hitokoto_font) loadFont(currentSettings.home_hitokoto_font);
+    if (currentSettings.card_title_font) loadFont(currentSettings.card_title_font);
+    if (currentSettings.card_desc_font) loadFont(currentSettings.card_desc_font);
+
+    // Update Card Style UI
+    selectCardStyle(currentSettings.layout_card_style || 'style1');
+    updatePreviewCards();
+    updatePreviewWidth();
   }
 
   // --- AI Call Logic (Frontend) ---

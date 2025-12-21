@@ -801,10 +801,36 @@ tr:nth-child(even) {
   border: 1px solid #bee5eb;
 }
 
-/* 卡片悬停效果 - Copied from style.css */
+/* Card Preview Variables & Base Styles */
+:root {
+  --card-padding: 1.25rem;
+  --card-radius: 0.75rem;
+  --frosted-glass-blur: 15px;
+}
+
 .site-card {
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  will-change: transform;
+  border-radius: var(--card-radius);
+  width: 100%;
+  max-width: 350px;
+  margin: 0 auto;
+}
+
+.site-card-content {
+  padding: var(--card-padding);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-card-fixed {
+  overflow: hidden;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .site-card:hover {
@@ -838,12 +864,13 @@ tr:nth-child(even) {
   transition-delay: 0.1s;
 }
 
-/* 多行文本截断 */
 .line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  word-break: break-word;
 }
 
 /* Settings Tabs */
@@ -944,4 +971,96 @@ input:checked + .slider:before {
 
 .slider.round:before {
   border-radius: 50%;
+}
+
+/* 毛玻璃效果 - Copied from style.css */
+.frosted-glass-effect {
+  background: rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(var(--frosted-glass-blur, 15px)) !important;
+  -webkit-backdrop-filter: blur(var(--frosted-glass-blur, 15px)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05) !important;
+}
+
+.frosted-glass-effect:hover {
+  background: rgba(255, 255, 255, 0.7) !important;
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Fix: Ensure datalist arrow is visible and interactive */
+input[list]::-webkit-calendar-picker-indicator {
+  opacity: 1 !important;
+  display: block !important;
+  background-image: url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Cpolyline points="6 9 12 15 18 9"%3E%3C/polyline%3E%3C/svg%3E');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 16px;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  margin-left: -10px; /* Pull it slightly left if needed, or stick to right */
+  transition: all 0.2s;
+}
+
+input[list]:hover::-webkit-calendar-picker-indicator {
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 50%;
+}
+
+/* ========================================= */
+/* 风格二 (Style 2): 垂直布局 - Copied from style.css */
+/* ========================================= */
+.site-card.style-2 .flex.items-start {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.site-card.style-2 .site-icon {
+    margin-right: 0;
+    margin-bottom: 0.5rem;
+    width: 3rem; 
+    height: 3rem;
+    transition: transform 0.3s ease;
+}
+
+.site-card.style-2:hover .site-icon {
+    transform: scale(1.1);
+}
+
+.site-card.style-2 .site-icon img,
+.site-card.style-2 .site-icon div {
+    margin: 0 auto;
+}
+
+.site-card.style-2 .site-title {
+    text-align: center;
+    margin-bottom: 0.25rem;
+    display: block;
+    width: 100%;
+}
+
+.site-card.style-2 .flex-1 {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.site-card.style-2 .preview-category {
+    margin-top: 0.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.site-card.style-2 p {
+    text-align: center;
+    margin-top: 0.5rem;
+}
+
+.site-card.style-2 .preview-links {
+    margin-top: 0.75rem;
+    justify-content: space-between; 
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(0,0,0,0.05);
 }
