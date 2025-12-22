@@ -49,7 +49,8 @@ export async function onRequestGet({ env }) {
       'home_title_size', 'home_title_color',
       'home_subtitle_size', 'home_subtitle_color',
       'home_hide_stats', 'home_stats_size', 'home_stats_color',
-      'home_hide_hitokoto', 'home_hitokoto_size', 'home_hitokoto_color'
+      'home_hide_hitokoto', 'home_hitokoto_size', 'home_hitokoto_color',
+      'home_default_category'
     ];
     // Use dynamic placeholders
     const placeholders = keys.map(() => '?').join(',');

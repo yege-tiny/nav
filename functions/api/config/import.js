@@ -204,13 +204,19 @@ export async function onRequestPost(context) {
         }
 
         let newCatId;
+        let catNameForDb; // We need the name for the sites table redundancy
+
         if (isNewFormat) {
             // Map category using the old ID from the file
             newCatId = oldCatIdToNewCatIdMap.get(site.catelog_id);
+            // Find the name from existingDbCategories (which we updated with new inserts)
+            const catObj = existingDbCategories.find(c => c.id === newCatId);
+            if (catObj) catNameForDb = catObj.catelog;
         } else {
             // Map category by name for legacy format
             const catName = (site.catelog || 'Default').trim();
             newCatId = categoryNameToIdMap.get(catName);
+            catNameForDb = catName;
         }
 
         // If category could not be mapped, skip the site
@@ -231,8 +237,8 @@ export async function onRequestPost(context) {
         const sortOrderValue = normalizeSortOrder(site.sort_order);
 
         siteInsertStmts.push(
-            db.prepare('INSERT INTO sites (name, url, logo, desc, catelog_id, sort_order) VALUES (?, ?, ?, ?, ?, ?)')
-              .bind(sanitizedName, sanitizedUrl, sanitizedLogo, sanitizedDesc, newCatId, sortOrderValue)
+            db.prepare('INSERT INTO sites (name, url, logo, desc, catelog_id, catelog_name, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)')
+              .bind(sanitizedName, sanitizedUrl, sanitizedLogo, sanitizedDesc, newCatId, catNameForDb, sortOrderValue)
         );
         itemsAdded++;
     }

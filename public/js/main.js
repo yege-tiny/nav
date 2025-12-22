@@ -235,8 +235,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const name = (card.dataset.name || '').toLowerCase();
         const url = (card.dataset.url || '').toLowerCase();
         const catalog = (card.dataset.catalog || '').toLowerCase();
+        const desc = (card.dataset.desc || '').toLowerCase();
         
-        if (name.includes(keyword) || url.includes(keyword) || catalog.includes(keyword)) {
+        if (name.includes(keyword) || url.includes(keyword) || catalog.includes(keyword) || desc.includes(keyword)) {
             card.classList.remove('hidden');
         } else {
             card.classList.add('hidden');
@@ -605,6 +606,7 @@ document.addEventListener('DOMContentLoaded', function() {
         card.setAttribute('data-name', safeName);
         card.setAttribute('data-url', safeUrl);
         card.setAttribute('data-catalog', safeCatalog);
+        card.setAttribute('data-desc', safeDesc);
         
         card.innerHTML = `
         <div class="site-card-content">

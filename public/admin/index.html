@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>书签管理页面</title>
     <link rel="icon" href="/favicon.svg?v=4" type="image/svg+xml">
-    <link rel="stylesheet" href="/css/admin.css?v=10" />
-    <link rel="stylesheet" href="/css/admin-dropdown.css?v=2" />
+    <link rel="stylesheet" href="/css/admin.css?v=11" />
+    <link rel="stylesheet" href="/css/admin-dropdown.css?v=3" />
     <link
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&display=swap"
       rel="stylesheet"
@@ -278,6 +278,16 @@
                          </div>
                 </div>
                 <p class="text-xs text-gray-500 mb-4 px-2">选择横向时，左侧菜单隐藏，搜索框和分类导航显示在顶部区域。</p>
+
+                <div class="p-3 bg-gray-50 rounded border border-gray-100 mb-3">
+                    <h4 class="text-sm font-bold text-gray-700 mb-3 border-b border-gray-200 pb-1">默认显示分类</h4>
+                    <div>
+                        <label for="homeDefaultCategory" class="text-xs text-gray-500 block mb-1">选择首页默认加载的分类</label>
+                        <select id="homeDefaultCategory" class="w-full text-sm p-2 border rounded bg-white">
+                            <option value="">默认 (全部)</option>
+                        </select>
+                    </div>
+                </div>
 
                 <div class="p-3 bg-gray-50 rounded border border-gray-100 mb-3">
                     <h4 class="text-sm font-bold text-gray-700 mb-3 border-b border-gray-200 pb-1">功能图标</h4>
@@ -834,6 +844,6 @@
       </div>
     </div>
 
-    <script src="/js/admin.js?v=9"></script>
+    <script src="/js/admin.js?v=10"></script>
   </body>
 </html>

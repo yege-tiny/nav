@@ -50,11 +50,15 @@ export async function onRequestPut(context) {
       
     }
 
+    // Fetch category name
+    const categoryResult = await env.NAV_DB.prepare('SELECT catelog FROM category WHERE id = ?').bind(catelog_id).first();
+    const catelogName = categoryResult ? categoryResult.catelog : 'Unknown';
+
     const update = await env.NAV_DB.prepare(`
       UPDATE sites
-      SET name = ?, url = ?, logo = ?, desc = ?, catelog_id = ?, sort_order = ?, is_private = ?, update_time = CURRENT_TIMESTAMP
+      SET name = ?, url = ?, logo = ?, desc = ?, catelog_id = ?, catelog_name = ?, sort_order = ?, is_private = ?, update_time = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).bind(sanitizedName, sanitizedUrl, sanitizedLogo, sanitizedDesc, catelog_id, sortOrderValue, isPrivateValue, id).run();
+    `).bind(sanitizedName, sanitizedUrl, sanitizedLogo, sanitizedDesc, catelog_id, catelogName, sortOrderValue, isPrivateValue, id).run();
 
     return jsonResponse({
       code: 200,

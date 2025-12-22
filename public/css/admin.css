@@ -809,6 +809,8 @@ tr:nth-child(even) {
 }
 
 .site-card {
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  will-change: transform;
   border-radius: var(--card-radius);
   width: 100%;
   max-width: 350px;

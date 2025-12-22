@@ -67,6 +67,11 @@ export async function onRequestPut(context) {
       .bind(catelog, sort_order, parentId, categoryId)
       .run();
       
+    // Sync update sites table redundant column
+    await env.NAV_DB.prepare('UPDATE sites SET catelog_name = ? WHERE catelog_id = ?')
+      .bind(catelog, categoryId)
+      .run();
+
     return jsonResponse({
       code: 200,
       message: 'Category updated successfully'

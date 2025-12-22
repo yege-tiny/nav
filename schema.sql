@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS sites (
   logo TEXT,
   desc TEXT,
   catelog_id INTEGER NOT NULL,
+  catelog_name TEXT,
   sort_order INTEGER NOT NULL DEFAULT 9999,
   is_private INTEGER DEFAULT 0,
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -23,6 +24,7 @@ CREATE TABLE IF NOT EXISTS pending_sites (
   logo TEXT,
   desc TEXT,
   catelog_id INTEGER NOT NULL,
+  catelog_name TEXT,
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -6,7 +6,7 @@
   <title>{{SITE_NAME}} - 网址导航</title>
   <link href="https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet"/>
   <link rel="icon" href="/favicon.svg?v=4" type="image/svg+xml">
-  <link rel="stylesheet" href="/css/style.css?v=9">
+  <link rel="stylesheet" href="/css/style.css?v=10">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -111,7 +111,7 @@
       {{HEADER_CONTENT}}
     </header>
     
-    <section class="max-w-7xl mx-auto px-4 sm:px-6 {{STATS_ROW_PY_CLASS}}">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 {{STATS_ROW_PY_CLASS}}">
       <div class="flex items-center justify-between {{STATS_ROW_MB_CLASS}} {{STATS_ROW_HIDDEN}}">
         <h2 class="text-xl font-semibold text-gray-800 {{STATS_VISIBLE}}" {{STATS_STYLE}} data-role="list-heading" data-default="{{HEADING_DEFAULT}}" data-active="{{HEADING_ACTIVE}}">
           {{HEADING_TEXT}}
@@ -120,7 +120,9 @@
           <div id="hitokoto"><a href="#" target="_blank" id="hitokoto_text" {{HITOKOTO_STYLE}}>{{HITOKOTO_CONTENT}}</a></div>
         </div>
       </div>
-      
+    </div>
+    
+    <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-12">
       <div class="{{CONTAINER_CLASS}} p-4 sm:p-6">
         <div id="sitesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
           {{SITES_GRID}}
@@ -202,6 +204,6 @@
     </div>
   </div>
   
-  <script src="/js/main.js?v=11"></script>
+  <script src="/js/main.js?v=12"></script>
 </body>
 </html>

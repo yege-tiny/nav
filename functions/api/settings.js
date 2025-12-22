@@ -15,9 +15,26 @@ export async function onRequestGet(context) {
     const settings = {};
     if (results) {
         results.forEach(row => {
-            settings[row.key] = row.value;
+            // 忽略后端计算字段或调试字段，防止数据库脏数据覆盖
+            if (row.key === 'has_api_key' || row.key === 'debug_api_key_info') {
+                return;
+            }
+
+            // 敏感字段不返回给前端
+            if (row.key === 'apiKey') {
+                if (row.value && row.value.length > 0) {
+                    settings['has_api_key'] = true;
+                } else {
+                    settings['has_api_key'] = false;
+                }
+            } else {
+                settings[row.key] = row.value;
+            }
         });
     }
+    
+    // 强制调试：无论如何都设为 false，测试代码是否生效
+    // settings['has_api_key'] = row.value && row.value.length > 0; 
     
     return jsonResponse({
       code: 200,
@@ -68,6 +85,9 @@ export async function onRequestPost(context) {
     
     const batch = [];
     for (const [key, value] of Object.entries(settings)) {
+        // 不要保存临时字段
+        if (key === 'has_api_key' || key === 'debug_api_key_info') continue;
+        
         batch.push(stmt.bind(key, String(value)));
     }
 

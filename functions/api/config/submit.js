@@ -21,10 +21,13 @@ export async function onRequestPost(context) {
       return errorResponse('Name, URL and Category are required', 400);
     }
 
+    const categoryResult = await env.NAV_DB.prepare('SELECT catelog FROM category WHERE id = ?').bind(catelog_id).first();
+    const catelogName = categoryResult ? categoryResult.catelog : 'Unknown';
+
     await env.NAV_DB.prepare(`
-      INSERT INTO pending_sites (name, url, logo, desc, catelog_id)
-      VALUES (?, ?, ?, ?, ?)
-    `).bind(sanitizedName, sanitizedUrl, sanitizedLogo, sanitizedDesc, catelog_id).run();
+      INSERT INTO pending_sites (name, url, logo, desc, catelog_id, catelog_name)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(sanitizedName, sanitizedUrl, sanitizedLogo, sanitizedDesc, catelog_id, catelogName).run();
 
     return jsonResponse({
       code: 201,

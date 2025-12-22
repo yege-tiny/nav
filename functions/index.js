@@ -76,6 +76,24 @@ export async function onRequest(context) {
           await env.NAV_DB.prepare("ALTER TABLE sites ADD COLUMN is_private INTEGER DEFAULT 0").run();
       }
 
+      try {
+          await env.NAV_DB.prepare("SELECT catelog_name FROM sites LIMIT 1").first();
+      } catch (e) {
+          await env.NAV_DB.prepare("ALTER TABLE sites ADD COLUMN catelog_name TEXT").run();
+          // 仅在首次添加字段时，从 category 表一次性同步旧数据
+          await env.NAV_DB.prepare(`
+            UPDATE sites 
+            SET catelog_name = (SELECT catelog FROM category WHERE category.id = sites.catelog_id) 
+            WHERE catelog_name IS NULL
+          `).run();
+      }
+
+      try {
+          await env.NAV_DB.prepare("SELECT catelog_name FROM pending_sites LIMIT 1").first();
+      } catch (e) {
+          await env.NAV_DB.prepare("ALTER TABLE pending_sites ADD COLUMN catelog_name TEXT").run();
+      }
+
       indexesChecked = true;
     } catch (e) {
       console.error('Failed to ensure indexes or columns:', e);
@@ -121,52 +139,6 @@ export async function onRequest(context) {
   };
   sortCats(rootCategories);
 
-  // 2. 确定目标分类
-  const url = new URL(request.url);
-  let requestedCatalogName = (url.searchParams.get('catalog') || '').trim();
-  const explicitAll = requestedCatalogName.toLowerCase() === 'all';
-  
-  if (!requestedCatalogName && !explicitAll && env.DISPLAY_CATEGORY) {
-      const defaultCat = env.DISPLAY_CATEGORY.trim();
-      if (categoryIdMap.has(defaultCat)) {
-          requestedCatalogName = defaultCat;
-      }
-  }
-
-  let targetCategoryIds = [];
-  let currentCatalogName = '';
-  const catalogExists = requestedCatalogName && categoryIdMap.has(requestedCatalogName);
-  
-  if (catalogExists) {
-      const rootId = categoryIdMap.get(requestedCatalogName);
-      currentCatalogName = requestedCatalogName;
-      
-      // 用户要求：仅显示当前分类的数据，不包含子分类
-      targetCategoryIds.push(rootId);
-  }
-
-  // 3. 查询站点
-  let sites = [];
-  try {
-      let query = `SELECT s.*, c.catelog FROM sites s 
-                   LEFT JOIN category c ON s.catelog_id = c.id 
-                   WHERE (s.is_private = 0 OR ? = 1)`;
-      const params = [includePrivate];
-
-      if (targetCategoryIds.length > 0) {
-          const markers = targetCategoryIds.map(() => '?').join(',');
-          query += ` AND s.catelog_id IN (${markers})`;
-          params.push(...targetCategoryIds);
-      }
-
-      query += ` ORDER BY s.sort_order ASC, s.create_time DESC`;
-      
-      const { results } = await env.NAV_DB.prepare(query).bind(...params).all();
-      sites = results || [];
-  } catch (e) {
-      return new Response(`Failed to fetch sites: ${e.message}`, { status: 500 });
-  }
-
   // Settings & Wallpaper
   let layoutHideDesc = false;
   let layoutHideLinks = false;
@@ -193,6 +165,7 @@ export async function onRequest(context) {
   let homeSiteName = '';
   let homeSiteDescription = '';
   let homeSearchEngineEnabled = false;
+  let homeDefaultCategory = '';
   let layoutGridCols = '4';
   let layoutCustomWallpaper = '';
   let layoutMenuLayout = 'horizontal';
@@ -224,7 +197,7 @@ export async function onRequest(context) {
         'home_hide_github', 'home_hide_admin',
         'home_custom_font_url', 'home_title_font', 'home_subtitle_font', 'home_stats_font', 'home_hitokoto_font',
         'home_site_name', 'home_site_description',
-        'home_search_engine_enabled',
+        'home_search_engine_enabled', 'home_default_category',
         'layout_grid_cols', 'layout_custom_wallpaper', 'layout_menu_layout',
         'layout_random_wallpaper', 'bing_country',
         'layout_enable_frosted_glass', 'layout_frosted_glass_intensity',
@@ -272,6 +245,7 @@ export async function onRequest(context) {
         if (row.key === 'home_site_description') homeSiteDescription = row.value;
 
         if (row.key === 'home_search_engine_enabled') homeSearchEngineEnabled = row.value === 'true';
+        if (row.key === 'home_default_category') homeDefaultCategory = row.value;
 
         if (row.key === 'layout_grid_cols') layoutGridCols = row.value;
         if (row.key === 'layout_custom_wallpaper') layoutCustomWallpaper = row.value;
@@ -297,6 +271,54 @@ export async function onRequest(context) {
     }
   } catch (e) {}
 
+  // 2. 确定目标分类
+  const url = new URL(request.url);
+  let requestedCatalogName = (url.searchParams.get('catalog') || '').trim();
+  const explicitAll = requestedCatalogName.toLowerCase() === 'all';
+  
+  if (!requestedCatalogName && !explicitAll) {
+      // 优先级：数据库设置 (不再使用环境变量 DISPLAY_CATEGORY)
+      const defaultCat = (homeDefaultCategory || '').trim();
+      if (defaultCat && categoryIdMap.has(defaultCat)) {
+          requestedCatalogName = defaultCat;
+      }
+  }
+
+  let targetCategoryIds = [];
+  let currentCatalogName = '';
+  const catalogExists = requestedCatalogName && categoryIdMap.has(requestedCatalogName);
+  
+  if (catalogExists) {
+      const rootId = categoryIdMap.get(requestedCatalogName);
+      currentCatalogName = requestedCatalogName;
+      
+      // 用户要求：仅显示当前分类的数据，不包含子分类
+      targetCategoryIds.push(rootId);
+  }
+
+  // 3. 查询站点
+  let sites = [];
+  try {
+      let query = `SELECT s.*, s.catelog_name as catelog FROM sites s 
+                   WHERE (s.is_private = 0 OR ? = 1)`;
+      const params = [includePrivate];
+
+      if (targetCategoryIds.length > 0) {
+          const markers = targetCategoryIds.map(() => '?').join(',');
+          query += ` AND s.catelog_id IN (${markers})`;
+          params.push(...targetCategoryIds);
+      }
+
+      query += ` ORDER BY s.sort_order ASC, s.create_time DESC`;
+      
+      const { results } = await env.NAV_DB.prepare(query).bind(...params).all();
+      sites = results || [];
+  } catch (e) {
+      return new Response(`Failed to fetch sites: ${e.message}`, { status: 500 });
+  }
+
+  // Settings & Wallpaper (Moved up)
+  
   let nextWallpaperIndex = 0;
   if (layoutRandomWallpaper) {
       try {
@@ -499,7 +521,7 @@ export async function onRequest(context) {
         : 'site-card group bg-white border border-primary-100/60 shadow-sm overflow-hidden';
 
     return `
-      <div class="${baseCardClass} ${frostedClass} ${cardStyleClass}" data-id="${site.id}" data-name="${escapeHTML(site.name)}" data-url="${escapeHTML(normalizedUrl)}" data-catalog="${escapeHTML(site.catelog)}">
+      <div class="${baseCardClass} ${frostedClass} ${cardStyleClass}" data-id="${site.id}" data-name="${escapeHTML(site.name)}" data-url="${escapeHTML(normalizedUrl)}" data-catalog="${escapeHTML(site.catelog || site.catelog_name)}" data-desc="${safeDesc}">
         <div class="site-card-content">
           <a href="${escapeHTML(normalizedUrl || '#')}" ${hasValidUrl ? 'target="_blank" rel="noopener noreferrer"' : ''} class="block">
             <div class="flex items-start">
@@ -525,11 +547,15 @@ export async function onRequest(context) {
 
   let gridClass = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6 justify-items-center';
   if (layoutGridCols === '5') {
-      gridClass = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6 justify-items-center';
+      // 1024px+ 显示 5 列
+      gridClass = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-6 justify-items-center';
   } else if (layoutGridCols === '6') {
-      gridClass = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-6 justify-items-center';
+      // 1024px+ 显示 5 列, 1280px+ 显示 6 列 (优化：1200px 左右也可尝试 6 列，但考虑到侧边栏，保险起见 1280px 切 6 列，但 1024px 切 5 列已经比原来 4 列好了)
+      // 用户反馈 1200px 只有 4 列太少，现在 1200px 会是 5 列。
+      // 也可以加入 min-[1200px]:grid-cols-6
+      gridClass = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 min-[1200px]:grid-cols-6 gap-3 sm:gap-6 justify-items-center';
   } else if (layoutGridCols === '7') {
-      gridClass = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-6 justify-items-center';
+      gridClass = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 gap-3 sm:gap-6 justify-items-center';
   }
 
   const datalistOptions = categories.map((cat) => `<option value="${escapeHTML(cat.catelog)}">`).join('');
@@ -564,8 +590,8 @@ export async function onRequest(context) {
 
   // Determine if the stats row should be rendered with padding/margin
   const shouldRenderStatsRow = !homeHideStats || !homeHideHitokoto;
-  const statsRowPyClass = shouldRenderStatsRow ? 'py-8' : 'pt-8';
-  const statsRowMbClass = shouldRenderStatsRow ? 'mb-6' : 'mb-4';
+  const statsRowPyClass = shouldRenderStatsRow ? 'my-8' : 'hidden';
+  const statsRowMbClass = '';
   const statsRowHiddenClass = shouldRenderStatsRow ? '' : 'hidden';
 
   const horizontalTitleHtml = layoutHideTitle ? '' : `<h1 class="text-3xl md:text-4xl font-bold tracking-tight mb-3 ${titleColorClass}" ${titleStyle}>{{SITE_NAME}}</h1>`;

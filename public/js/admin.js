@@ -370,9 +370,9 @@ function showImportPreview(result) {
           注意: 将按照层级结构导入。若分类已存在（名称和父级匹配），将合并。
         </p>
       </div>
-      <div style="display: flex; gap: 10px; justify-content: flex-end;">
-        <button id="cancelImport" class="button-tertiary" style="background-color: #f3f4f6; color: #4b5563;">取消</button>
-        <button id="confirmImport" class="button-primary" style="background-color: #4f46e5; color: white;">确认导入</button>
+      <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
+        <button id="cancelImport" class="px-5 py-2.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium">取消</button>
+        <button id="confirmImport" class="px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium shadow-sm">确认导入</button>
       </div>
     </div>
   `;
@@ -2486,7 +2486,21 @@ const initSettings = () => {
 
   saveBtn.addEventListener('click', () => {
     // Update state from inputs
-    currentSettings.apiKey = apiKeyInput.value.trim();
+    const newApiKey = apiKeyInput.value.trim();
+    if (newApiKey) {
+        currentSettings.apiKey = newApiKey;
+    } else if (currentSettings.has_api_key) {
+        // User didn't type anything but we have a key, so don't send anything (undefined)
+        // allowing backend to keep existing value if we filter it, 
+        // OR we just don't update the property in currentSettings if it was undefined.
+        // But loadSettings sets currentSettings.apiKey = undefined.
+        // So just delete it to be safe, ensuring it's not sent as ""
+        delete currentSettings.apiKey;
+    } else {
+        // No key previously, and input is empty -> clear it
+        currentSettings.apiKey = '';
+    }
+
     currentSettings.baseUrl = baseUrlInput.value.trim();
     currentSettings.model = modelNameInput.value.trim();
     currentSettings.layout_hide_desc = hideDescSwitch.checked;
@@ -2518,6 +2532,10 @@ const initSettings = () => {
 
     currentSettings.home_site_name = homeSiteNameInput.value.trim();
     currentSettings.home_site_description = homeSiteDescriptionInput.value.trim();
+    
+    if (homeDefaultCategorySelect) {
+        currentSettings.home_default_category = homeDefaultCategorySelect.value;
+    }
 
     currentSettings.home_search_engine_enabled = searchEngineSwitch.checked;
 
@@ -2607,7 +2625,39 @@ const initSettings = () => {
 
   // --- Helper Functions ---
 
+  const homeDefaultCategorySelect = document.getElementById('homeDefaultCategory');
+
   async function loadSettings() {
+    // Ensure categories are loaded for the dropdown
+    if (categoriesTree.length === 0) {
+        try {
+            const res = await fetch('/api/categories?pageSize=9999');
+            const data = await res.json();
+            if (data.code === 200) {
+                categoriesData = data.data || [];
+                categoriesTree = buildCategoryTree(categoriesData);
+            }
+        } catch (e) { console.error('Failed to load categories for settings', e); }
+    }
+
+    if (homeDefaultCategorySelect) {
+        homeDefaultCategorySelect.innerHTML = '<option value="">默认 (全部)</option>';
+        
+        // Helper to flatten tree for simple select
+        const addOptions = (nodes, prefix = '') => {
+            nodes.forEach(node => {
+                const option = document.createElement('option');
+                option.value = node.catelog; // Store Name as value, because config uses name
+                option.textContent = prefix + node.catelog;
+                homeDefaultCategorySelect.appendChild(option);
+                if (node.children && node.children.length > 0) {
+                    addOptions(node.children, prefix + '-- ');
+                }
+            });
+        };
+        addOptions(categoriesTree);
+    }
+
     try {
         // 1. Try to fetch from server (new source of truth)
         const res = await fetch('/api/settings');
@@ -2618,7 +2668,12 @@ const initSettings = () => {
             
             // Map known keys
             if (serverSettings.provider) currentSettings.provider = serverSettings.provider;
-            if (serverSettings.apiKey) currentSettings.apiKey = serverSettings.apiKey;
+            
+            // Handle API Key securely
+            currentSettings.has_api_key = !!serverSettings.has_api_key;
+            
+            if (serverSettings.apiKey) currentSettings.apiKey = serverSettings.apiKey; // Should be undefined now
+            
             if (serverSettings.baseUrl) currentSettings.baseUrl = serverSettings.baseUrl;
             if (serverSettings.model) currentSettings.model = serverSettings.model;
             
@@ -2653,6 +2708,8 @@ const initSettings = () => {
             if (serverSettings.home_site_description) currentSettings.home_site_description = serverSettings.home_site_description;
 
             if (serverSettings.home_search_engine_enabled !== undefined) currentSettings.home_search_engine_enabled = serverSettings.home_search_engine_enabled === 'true';
+            
+            if (serverSettings.home_default_category) currentSettings.home_default_category = serverSettings.home_default_category;
 
             if (serverSettings.layout_enable_frosted_glass !== undefined) currentSettings.layout_enable_frosted_glass = serverSettings.layout_enable_frosted_glass === 'true';
             if (serverSettings.layout_frosted_glass_intensity) currentSettings.layout_frosted_glass_intensity = serverSettings.layout_frosted_glass_intensity;
@@ -2675,22 +2732,10 @@ const initSettings = () => {
             if (serverSettings.card_desc_size) currentSettings.card_desc_size = serverSettings.card_desc_size;
             if (serverSettings.card_desc_color) currentSettings.card_desc_color = serverSettings.card_desc_color;
 
-        } else {
-            // Fallback to localStorage if server has no data (migration)
-            const localConfig = localStorage.getItem('ai_settings');
-            if (localConfig) {
-                const parsed = JSON.parse(localConfig);
-                currentSettings = { ...currentSettings, ...parsed };
-            }
         }
     } catch (e) {
         console.error('Failed to load settings', e);
-        // Fallback to localStorage
-        const localConfig = localStorage.getItem('ai_settings');
-        if (localConfig) {
-            const parsed = JSON.parse(localConfig);
-            currentSettings = { ...currentSettings, ...parsed };
-        }
+        // Fallback removed: Server is the single source of truth.
     }
 
     updateUIFromSettings();
@@ -2738,7 +2783,15 @@ const initSettings = () => {
       providerSelector.value = currentSettings.provider || 'workers-ai';
     }
     const provider = currentSettings.provider || 'workers-ai';
+    
+    // API Key UI Logic
     apiKeyInput.value = currentSettings.apiKey || '';
+    if (currentSettings.has_api_key && !apiKeyInput.value) {
+        apiKeyInput.placeholder = '已配置 (如需修改请直接输入)';
+    } else {
+        apiKeyInput.placeholder = '请输入 API Key';
+    }
+
     baseUrlInput.value = currentSettings.baseUrl || '';
     
     // Legacy fix
@@ -2820,6 +2873,8 @@ const initSettings = () => {
 
     if (homeSiteNameInput) homeSiteNameInput.value = currentSettings.home_site_name || '';
     if (homeSiteDescriptionInput) homeSiteDescriptionInput.value = currentSettings.home_site_description || '';
+    
+    if (homeDefaultCategorySelect) homeDefaultCategorySelect.value = currentSettings.home_default_category || '';
 
     if (searchEngineSwitch) searchEngineSwitch.checked = !!currentSettings.home_search_engine_enabled;
 
@@ -2913,7 +2968,6 @@ const initSettings = () => {
   // --- AI Call Logic (Frontend) ---
   // Note: Pass currentSettings instead of trying to read from localStorage inside
   async function getAIDescription(aiConfig, bookmark, generateName = false) {
-    const { provider, apiKey, baseUrl, model } = aiConfig;
     const { name, url } = bookmark;
 
     let systemPrompt, userPrompt;
@@ -2925,77 +2979,33 @@ const initSettings = () => {
       userPrompt = `为以下书签生成一个简洁的中文描述（不超过30字）。请直接返回描述内容，不要包含"书签名称"、"描述"等前缀，也不要使用"标题: 描述"的格式。书签名称：'${name}'，链接：'${url}'`;
     }
 
-    let responseText = '';
-
     try {
-      if (provider === 'workers-ai') {
-        const response = await fetch('/api/ai-chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt }
-            ]
-          })
-        });
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Workers AI error: ${errorText}`);
-        }
-        const data = await response.json();
-        responseText = typeof data.data === 'string' ? data.data : (data.data.response || JSON.stringify(data.data));
+      // 始终通过后端 API 进行请求，后端会处理不同的 provider (Workers AI, Gemini, OpenAI)
+      const response = await fetch('/api/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ]
+        })
+      });
 
-      } else if (provider === 'gemini') {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const response = await fetch(geminiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: userPrompt }] }],
-            generationConfig: { temperature: 0.7 },
-          }),
-        });
-        if (!response.ok) {
-          const errorBody = await response.text();
-          throw new Error(`Gemini API error (${response.status}): ${errorBody}`);
-        }
-        const data = await response.json();
-        responseText = data.candidates[0].content.parts[0].text.trim();
-      } else if (provider === 'openai') {
-        const openaiUrl = `${baseUrl}/v1/chat/completions`;
-        const response = await fetch(openaiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt }
-            ],
-            temperature: 0.7,
-
-          }),
-        });
-        if (!response.ok) {
-          const errorBody = await response.text();
-          throw new Error(`OpenAI API error (${response.status}): ${errorBody}`);
-        }
-        const data = await response.json();
-        responseText = data.choices[0].message.content.trim();
-      } else {
-        throw new Error('Unsupported AI provider');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `AI 请求失败: ${response.status}`);
       }
+
+      const data = await response.json();
+      const responseText = data.data;
 
       if (generateName) {
         try {
           const jsonStr = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
           return JSON.parse(jsonStr);
         } catch (e) {
-          console.warn('JSON parse failed, returning raw text as description', e);
+          console.warn('JSON 解析失败，将原始文本作为描述返回', e);
           return { description: responseText, name: '' };
         }
       } else {
@@ -3003,7 +3013,7 @@ const initSettings = () => {
       }
 
     } catch (error) {
-      console.error('AI description generation failed:', error);
+      console.error('AI 描述生成失败:', error);
       throw error;
     }
   }
@@ -3014,12 +3024,8 @@ const initSettings = () => {
     currentSettings.baseUrl = baseUrlInput.value.trim();
     currentSettings.model = modelNameInput.value.trim();
 
-    // Validation
+    // Validation - Backend will validate API Key
     if (currentSettings.provider !== 'workers-ai') {
-      if (!currentSettings.apiKey || !currentSettings.model) {
-        showMessage('请先配置 API Key 和模型名称', 'error');
-        return;
-      }
       if (currentSettings.provider === 'openai' && !currentSettings.baseUrl) {
         showMessage('使用 OpenAI 兼容模式时，Base URL 是必填项', 'error');
         return;
@@ -3142,15 +3148,6 @@ const initSettings = () => {
 
     if (!url) {
       showModalMessage(modalId, '请先填写 URL', 'error');
-      return;
-    }
-
-    // Ensure config is loaded
-    loadSettings();
-
-    // Check if AI is configured (if not workers-ai, need key)
-    if (currentSettings.provider !== 'workers-ai' && !currentSettings.apiKey) {
-      showModalMessage(modalId, '请先在 AI 设置中配置 API Key', 'error');
       return;
     }
 
