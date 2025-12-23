@@ -67,11 +67,11 @@ export async function onRequestGet(context) {
     }
 
     if (keyword) {
-      queryBase += ` AND (s.name LIKE ? OR s.url LIKE ? OR s.catelog_name LIKE ?)`;
+      queryBase += ` AND (name LIKE ? OR url LIKE ? OR catelog_name LIKE ?)`;
       queryBindParams.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
     }
 
-    const query = `SELECT s.*, s.catelog_name as catelog ${queryBase} ORDER BY s.sort_order ASC, s.create_time DESC LIMIT ? OFFSET ?`;
+    const query = `SELECT * ${queryBase} ORDER BY sort_order ASC, create_time DESC LIMIT ? OFFSET ?`;
     const countQuery = `SELECT COUNT(*) as total ${queryBase}`;
     
     // 添加分页参数
@@ -121,6 +121,13 @@ export async function onRequestPost(context) {
     if (!sanitizedName || !sanitizedUrl || !catelogId) {
       return errorResponse('Name, URL and Catelog are required', 400);
     }
+
+    // Check if URL already exists
+    const existingSite = await env.NAV_DB.prepare('SELECT id FROM sites WHERE url = ?').bind(sanitizedUrl).first();
+    if (existingSite) {
+        return errorResponse('该 URL 已存在，请勿重复添加', 409);
+    }
+
     if(!logo && url){
       if(url.startsWith('https://') || url.startsWith('http://')){
         const domain = url.replace(/^https?:\/\//, '').split('/')[0];
@@ -132,15 +139,22 @@ export async function onRequestPost(context) {
       
     }
     // Find the category ID from the category name
-    const categoryResult = await env.NAV_DB.prepare('SELECT catelog FROM category WHERE id = ?').bind(catelogId).first();
+    const categoryResult = await env.NAV_DB.prepare('SELECT catelog, is_private FROM category WHERE id = ?').bind(catelogId).first();
 
     if (!categoryResult) {
       return errorResponse(`Category not found.`, 400);
     }
+    
+    // If category is private, force site to be private
+    let finalIsPrivate = isPrivateValue;
+    if (categoryResult.is_private === 1) {
+        finalIsPrivate = 1;
+    }
+
     const insert = await env.NAV_DB.prepare(`
       INSERT INTO sites (name, url, logo, desc, catelog_id, catelog_name, sort_order, is_private)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(sanitizedName, sanitizedUrl, sanitizedLogo, sanitizedDesc, catelogId, categoryResult.catelog, sortOrderValue, isPrivateValue).run();
+    `).bind(sanitizedName, sanitizedUrl, sanitizedLogo, sanitizedDesc, catelogId, categoryResult.catelog, sortOrderValue, finalIsPrivate).run();
 
     return jsonResponse({
       code: 201,

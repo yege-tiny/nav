@@ -62,15 +62,23 @@ export async function onRequestPut(context) {
 
     sort_order = normalizeSortOrder(sort_order);
     const parentId = body.parent_id !== undefined ? parseInt(body.parent_id, 10) : 0;
+    const isPrivate = body.is_private ? 1 : 0;
 
-    await env.NAV_DB.prepare('UPDATE category SET catelog = ?, sort_order = ?, parent_id = ? WHERE id = ?')
-      .bind(catelog, sort_order, parentId, categoryId)
+    await env.NAV_DB.prepare('UPDATE category SET catelog = ?, sort_order = ?, parent_id = ?, is_private = ? WHERE id = ?')
+      .bind(catelog, sort_order, parentId, isPrivate, categoryId)
       .run();
       
     // Sync update sites table redundant column
     await env.NAV_DB.prepare('UPDATE sites SET catelog_name = ? WHERE catelog_id = ?')
       .bind(catelog, categoryId)
       .run();
+
+    // If category is set to private, force all sites in this category to be private
+    if (isPrivate === 1) {
+        await env.NAV_DB.prepare('UPDATE sites SET is_private = 1 WHERE catelog_id = ?')
+          .bind(categoryId)
+          .run();
+    }
 
     return jsonResponse({
       code: 200,

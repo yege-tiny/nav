@@ -28,12 +28,13 @@ export async function onRequestPost(context) {
     // 获取排序值,如果未提供则使用 9999
     const sortOrderValue = normalizeSortOrder(body.sort_order);
     const parentId = body.parent_id ? parseInt(body.parent_id, 10) : 0;
+    const isPrivate = body.is_private ? 1 : 0;
 
     // 插入新分类
     await env.NAV_DB.prepare(`
-      INSERT INTO category (catelog, sort_order, parent_id)
-      VALUES (?, ?, ?)
-    `).bind(categoryName, sortOrderValue, parentId).run();
+      INSERT INTO category (catelog, sort_order, parent_id, is_private)
+      VALUES (?, ?, ?, ?)
+    `).bind(categoryName, sortOrderValue, parentId, isPrivate).run();
 
     return jsonResponse({
       code: 201,
@@ -41,7 +42,8 @@ export async function onRequestPost(context) {
       data: {
         catelog: categoryName,
         sort_order: sortOrderValue,
-        parent_id: parentId
+        parent_id: parentId,
+        is_private: isPrivate
       }
     }, 201);
   } catch (e) {

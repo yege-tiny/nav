@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>书签管理页面</title>
     <link rel="icon" href="/favicon.svg?v=4" type="image/svg+xml">
-    <link rel="stylesheet" href="/css/admin.css?v=11" />
+    <link rel="stylesheet" href="/css/admin.css?v=12" />
     <link rel="stylesheet" href="/css/admin-dropdown.css?v=3" />
     <link
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&display=swap"
@@ -81,24 +81,73 @@
         </div>
       </div>
 
+      <!-- 导出选项模态框 -->
+      <div id="exportModal" class="modal" style="display: none">
+        <div class="modal-content">
+          <span class="modal-close" id="closeExportModal">×</span>
+          <h2>导出选项</h2>
+          <div class="p-4">
+              <p class="text-sm text-gray-600 mb-4">请选择导出数据的包含范围：</p>
+              <div class="flex items-center justify-between p-3 bg-gray-50 rounded border border-gray-100">
+                  <div class="flex flex-col">
+                      <span class="text-gray-700 font-medium text-sm">包含私密数据</span>
+                      <span class="text-gray-400 text-xs mt-1">同时也包含私密分类下的书签</span>
+                  </div>
+                  <label class="switch">
+                      <input type="checkbox" id="exportIncludePrivate">
+                      <span class="slider round"></span>
+                  </label>
+              </div>
+          </div>
+          <div class="flex justify-end gap-3 mt-4">
+            <button id="cancelExportBtn" class="px-4 py-2 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 text-sm">取消</button>
+            <button id="confirmExportBtn" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm">确认导出</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 删除确认模态框 -->
+      <div id="deleteConfirmModal" class="modal" style="display: none">
+        <div class="modal-content">
+          <span class="modal-close" id="closeDeleteConfirmModal">×</span>
+          <h2>确认删除</h2>
+          <div class="p-4">
+              <p class="text-gray-700 font-medium text-base mb-2">确定要删除该书签吗？</p>
+              <p class="text-gray-500 text-sm">此操作无法撤销，请谨慎操作。</p>
+          </div>
+          <div class="flex justify-end gap-3 mt-4">
+            <button id="cancelDeleteBtn" class="px-4 py-2 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 text-sm font-medium transition-colors">取消</button>
+            <button id="confirmDeleteBtn" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm font-medium shadow-sm transition-colors">删除</button>
+          </div>
+        </div>
+      </div>
+
       <!-- 新增分类模态框 -->
       <div id="addCategoryModal" class="modal" style="display: none">
         <div class="modal-content">
           <span class="modal-close" id="closeCategoryModal">×</span>
           <h2>新增分类</h2>
           <form id="addCategoryForm">
-            <label for="newCategoryName">分类名称:</label>
-            <input type="text" id="newCategoryName" required /><br />
-            <label for="newCategoryParent">父级分类(可选):</label>
-            <div id="newCategoryParentWrapper" class="custom-dropdown-wrapper"></div>
-            <input type="hidden" id="newCategoryParent" value="0">
-            <br />
-            <label for="newCategorySortOrder">排序值(可选,默认9999):</label>
-            <input
-              type="number"
-              id="newCategorySortOrder"
-              placeholder="9999"
-            /><br />
+            <div class="form-group">
+                <label for="newCategoryName">分类名称:</label>
+                <input type="text" id="newCategoryName" required />
+            </div>
+            <div class="form-group">
+                <label for="newCategoryParent">父级分类(可选):</label>
+                <div id="newCategoryParentWrapper" class="custom-dropdown-wrapper"></div>
+                <input type="hidden" id="newCategoryParent" value="0">
+            </div>
+            <div class="form-group">
+                <label for="newCategorySortOrder">排序值(可选,默认9999):</label>
+                <input type="number" id="newCategorySortOrder" placeholder="9999" />
+            </div>
+            <div class="form-group flex items-center justify-between mt-2 mb-4">
+              <label for="newCategoryIsPrivate" class="cursor-pointer select-none text-gray-700 font-medium">私密分类:</label>
+              <label class="switch">
+                  <input type="checkbox" id="newCategoryIsPrivate">
+                  <span class="slider round"></span>
+              </label>
+            </div>
             <button type="submit">保存</button>
           </form>
         </div>
@@ -217,14 +266,26 @@
           <h2>编辑分类</h2>
           <form id="editCategoryForm">
             <input type="hidden" name="id" id="editCategoryId" />
-            <label for="editCategoryName">分类名称:</label>
-            <input type="text" id="editCategoryName" required /><br />
-            <label for="editCategoryParent">父级分类(可选):</label>
-            <div id="editCategoryParentWrapper" class="custom-dropdown-wrapper"></div>
-            <input type="hidden" id="editCategoryParent" value="0">
-            <br />
-            <label for="editCategorySortOrder">排序值(可选):</label>
-            <input type="number" id="editCategorySortOrder" /><br />
+            <div class="form-group">
+                <label for="editCategoryName">分类名称:</label>
+                <input type="text" id="editCategoryName" required />
+            </div>
+            <div class="form-group">
+                <label for="editCategoryParent">父级分类(可选):</label>
+                <div id="editCategoryParentWrapper" class="custom-dropdown-wrapper"></div>
+                <input type="hidden" id="editCategoryParent" value="0">
+            </div>
+            <div class="form-group">
+                <label for="editCategorySortOrder">排序值(可选):</label>
+                <input type="number" id="editCategorySortOrder" />
+            </div>
+            <div class="form-group flex items-center justify-between mt-2 mb-4">
+              <label for="editCategoryIsPrivate" class="cursor-pointer select-none text-gray-700 font-medium">私密分类:</label>
+              <label class="switch">
+                  <input type="checkbox" id="editCategoryIsPrivate">
+                  <span class="slider round"></span>
+              </label>
+            </div>
             <button type="submit">保存</button>
           </form>
         </div>
@@ -844,6 +905,6 @@
       </div>
     </div>
 
-    <script src="/js/admin.js?v=10"></script>
+    <script src="/js/admin.js?v=11"></script>
   </body>
 </html>

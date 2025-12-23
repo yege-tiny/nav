@@ -62,7 +62,7 @@ let indexesChecked = false;
 
 export async function onRequest(context) {
   const { request, env } = context;
-  
+  console.log("indexesChecked:",indexesChecked)
   if (!indexesChecked) {
     try {
       await env.NAV_DB.batch([
@@ -94,6 +94,16 @@ export async function onRequest(context) {
           await env.NAV_DB.prepare("ALTER TABLE pending_sites ADD COLUMN catelog_name TEXT").run();
       }
 
+      try {
+          await env.NAV_DB.prepare("SELECT is_private FROM category LIMIT 1").first();
+      } catch (e) {
+          try {
+             await env.NAV_DB.prepare("ALTER TABLE category ADD COLUMN is_private INTEGER DEFAULT 0").run();
+          } catch(e2) {
+             console.error('Failed to add is_private to category', e2);
+          }
+      }
+
       indexesChecked = true;
     } catch (e) {
       console.error('Failed to ensure indexes or columns:', e);
@@ -106,7 +116,12 @@ export async function onRequest(context) {
   // 1. 获取所有分类
   let categories = [];
   try {
-    const { results } = await env.NAV_DB.prepare('SELECT * FROM category ORDER BY sort_order ASC, id ASC').all();
+    let query = 'SELECT * FROM category';
+    if (!isAuthenticated) {
+        query += ' WHERE is_private = 0';
+    }
+    query += ' ORDER BY sort_order ASC, id ASC';
+    const { results } = await env.NAV_DB.prepare(query).all();
     categories = results || [];
   } catch (e) {
     console.error('Failed to fetch categories:', e);
@@ -296,254 +311,501 @@ export async function onRequest(context) {
       targetCategoryIds.push(rootId);
   }
 
-  // 3. 查询站点
-  let sites = [];
-  try {
-      let query = `SELECT s.*, s.catelog_name as catelog FROM sites s 
-                   WHERE (s.is_private = 0 OR ? = 1)`;
-      const params = [includePrivate];
+    // 3. 查询站点
 
-      if (targetCategoryIds.length > 0) {
-          const markers = targetCategoryIds.map(() => '?').join(',');
-          query += ` AND s.catelog_id IN (${markers})`;
-          params.push(...targetCategoryIds);
-      }
+    let sites = [];
 
-      query += ` ORDER BY s.sort_order ASC, s.create_time DESC`;
-      
-      const { results } = await env.NAV_DB.prepare(query).bind(...params).all();
-      sites = results || [];
-  } catch (e) {
-      return new Response(`Failed to fetch sites: ${e.message}`, { status: 500 });
-  }
+    try {
 
-  // Settings & Wallpaper (Moved up)
+        let query = `SELECT id, name, url, logo, desc, catelog_id, catelog_name, sort_order, is_private, create_time, update_time FROM sites
+
+                     WHERE (is_private = 0 OR ? = 1)`;
+
+        const params = [includePrivate];
+
   
-  let nextWallpaperIndex = 0;
-  if (layoutRandomWallpaper) {
-      try {
-          const cookies = request.headers.get('Cookie') || '';
-          const match = cookies.match(/wallpaper_index=(\d+)/);
-          const currentWallpaperIndex = match ? parseInt(match[1]) : -1;
 
-          if (wallpaperSource === '360') {
-             const cid = wallpaperCid360 || '36';
-             const apiUrl = `http://cdn.apc.360.cn/index.php?c=WallPaper&a=getAppsByCategory&from=360chrome&cid=${cid}&start=0&count=8`;
-             const res = await fetch(apiUrl);
-             if (res.ok) {
-                 const json = await res.json();
-                 if (json.errno === "0" && json.data && json.data.length > 0) {
-                      nextWallpaperIndex = (currentWallpaperIndex + 1) % json.data.length;
-                      const targetItem = json.data[nextWallpaperIndex];
-                      let targetUrl = targetItem.url;
-                      console.log('360 Wallpaper URL:', targetUrl);
-                      if (targetUrl) {
-                          // Try to upgrade to HTTPS if possible to avoid mixed content
-                          targetUrl = targetUrl.replace('http://', 'https://');
-                          layoutCustomWallpaper = targetUrl;
-                      }
-                 }
-             }
-          } else {
-              // Default to Bing
-              let bingUrl = '';
-              if (bingCountry === 'spotlight') {
-                  bingUrl = 'https://peapix.com/spotlight/feed?n=7';
-              } else {
-                  bingUrl = `https://peapix.com/bing/feed?n=7&country=${bingCountry}`;
-              }
-              
-              const res = await fetch(bingUrl);
-              if (res.ok) {
-                  const data = await res.json();
-                  if (Array.isArray(data) && data.length > 0) {
-                      nextWallpaperIndex = (currentWallpaperIndex + 1) % data.length;
-                      const targetItem = data[nextWallpaperIndex];
-                      const targetUrl = targetItem.fullUrl || targetItem.url;
-                      if (targetUrl) {
-                          layoutCustomWallpaper = targetUrl;
-                      }
-                  }
-              }
-          }
-      } catch (e) {
-          console.error('Random Wallpaper Error:', e);
-      }
-  }
+        if (targetCategoryIds.length > 0) {
 
-  const isCustomWallpaper = Boolean(layoutCustomWallpaper);
-  const themeClass = isCustomWallpaper ? 'custom-wallpaper' : '';
+            const markers = targetCategoryIds.map(() => '?').join(',');
+
+            query += ` AND catelog_id IN (${markers})`;
+
+            params.push(...targetCategoryIds);
+
+        }
+
   
-  // Header Base Classes
-  let headerClass = isCustomWallpaper 
-      ? 'bg-transparent border-none shadow-none transition-colors duration-300' 
-      : 'bg-primary-700 text-white border-b border-primary-600 shadow-sm';
 
-  let containerClass = isCustomWallpaper
-      ? 'rounded-2xl'
-      : 'rounded-2xl border border-primary-100/60 bg-white/80 backdrop-blur-sm shadow-sm';
+        query += ` ORDER BY sort_order ASC, create_time DESC`;
 
-  const titleColorClass = isCustomWallpaper ? 'text-gray-900' : 'text-white';
-  const subTextColorClass = isCustomWallpaper ? 'text-gray-600' : 'text-primary-100/90';
+        
+
+        const { results } = await env.NAV_DB.prepare(query).bind(...params).all();
+
+        sites = results || [];
+
+    } catch (e) {
+
+        return new Response(`Failed to fetch sites: ${e.message}`, { status: 500 });
+
+    }
+
   
-  const searchInputClass = isCustomWallpaper
-      ? 'bg-white/90 backdrop-blur border border-gray-200 text-gray-800 placeholder-gray-400 focus:ring-primary-200 focus:border-primary-400 focus:bg-white'
-      : 'bg-white/15 text-white placeholder-primary-200 focus:ring-white/30 focus:bg-white/20 border-none';
-  const searchIconClass = isCustomWallpaper ? 'text-gray-400' : 'text-primary-200';
 
-  // 4. 生成动态菜单
-  const renderHorizontalMenu = (cats, level = 0) => {
-      if (!cats || cats.length === 0) return '';
-      
-      return cats.map(cat => {
-          const isActive = (currentCatalogName === cat.catelog);
-          const hasChildren = cat.children && cat.children.length > 0;
-          const safeName = escapeHTML(cat.catelog);
-          const encodedName = encodeURIComponent(cat.catelog);
-          const linkUrl = `?catalog=${encodedName}`;
-          
-          let html = '';
-          if (level === 0) {
-              const activeClass = isActive ? 'active' : 'inactive';
-              const navItemActiveClass = isActive ? 'nav-item-active' : '';
-              
-              html += `<div class="menu-item-wrapper relative inline-block text-left">`;
-              html += `<a href="${linkUrl}" class="nav-btn ${activeClass} ${navItemActiveClass}" data-id="${cat.id}">
-                          ${safeName}
-                          ${hasChildren ? '<svg class="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>' : ''}
-                       </a>`;
-              if (hasChildren) {
-                  html += `<div class="dropdown-menu">`;
-                  html += renderHorizontalMenu(cat.children, level + 1);
-                  html += `</div>`;
-              }
-              html += `</div>`;
-          } else {
-              const activeClass = isActive ? 'active' : '';
-              const navItemActiveClass = isActive ? 'nav-item-active' : '';
-              
-              html += `<div class="menu-item-wrapper relative block w-full">`;
-              html += `<a href="${linkUrl}" class="dropdown-item ${activeClass} ${navItemActiveClass}" data-id="${cat.id}">
-                          ${safeName}
-                          ${hasChildren ? '<svg class="dropdown-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>' : ''}
-                       </a>`;
-              if (hasChildren) {
-                  html += `<div class="dropdown-menu">`;
-                  html += renderHorizontalMenu(cat.children, level + 1);
-                  html += `</div>`;
-              }
-              html += `</div>`;
-          }
-          return html;
-      }).join('');
-  };
+    // Settings & Wallpaper (Moved up)
 
-  const allLinkActive = !catalogExists;
-  const allLinkClass = allLinkActive ? 'active' : 'inactive';
-  const allLinkActiveMarker = allLinkActive ? 'nav-item-active' : '';
-  
-  const horizontalAllLink = `
-      <div class="menu-item-wrapper relative inline-block text-left">
-        <a href="?catalog=all" class="nav-btn ${allLinkClass} ${allLinkActiveMarker}">
-            全部
-        </a>
-      </div>
-  `;
-  
-  const horizontalCatalogMarkup = horizontalAllLink + renderHorizontalMenu(rootCategories);
-
-  // Vertical Menu (Sidebar)
-  const renderVerticalMenu = (cats, level = 0) => {
-      return cats.map(cat => {
-          const safeName = escapeHTML(cat.catelog);
-          const encodedName = encodeURIComponent(cat.catelog);
-          const isActive = currentCatalogName === cat.catelog;
-          
-          const baseClass = "flex items-center px-3 py-2 rounded-lg w-full transition-colors duration-200";
-          const activeClass = isActive ? "bg-secondary-100 text-primary-700" : "hover:bg-gray-100 text-gray-700";
-          // Use darker icon color for custom wallpaper mode to ensure visibility
-          const defaultIconColor = isCustomWallpaper ? "text-gray-600" : "text-gray-400";
-          const iconClass = isActive ? "text-primary-600" : defaultIconColor;
-          const indent = level * 12; 
-          
-          let html = `
-            <a href="?catalog=${encodedName}" data-id="${cat.id}" class="${baseClass} ${activeClass}" style="padding-left: ${12 + indent}px">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 ${iconClass}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                </svg>
-                ${safeName}
-            </a>
-          `;
-          if (cat.children && cat.children.length > 0) {
-              html += renderVerticalMenu(cat.children, level + 1);
-          }
-          return html;
-      }).join('');
-  };
-  
-  const catalogLinkMarkup = renderVerticalMenu(rootCategories);
-
-  // Sites Grid
-  const sitesGridMarkup = sites.map((site) => {
-    const rawName = site.name || '未命名';
-    const rawCatalog = site.catelog || '未分类';
-    const rawDesc = site.desc || '暂无描述';
-    const normalizedUrl = sanitizeUrl(site.url);
-    const safeDisplayUrl = normalizedUrl || '未提供链接';
-    const logoUrl = sanitizeUrl(site.logo);
-    const cardInitial = escapeHTML((rawName.trim().charAt(0) || '站').toUpperCase());
-    const safeName = escapeHTML(rawName);
-    const safeCatalog = escapeHTML(rawCatalog);
-    const safeDesc = escapeHTML(rawDesc);
-    const hasValidUrl = Boolean(normalizedUrl);
-
-    const descHtml = layoutHideDesc ? '' : `<p class="mt-2 text-sm text-gray-600 leading-relaxed line-clamp-2" title="${safeDesc}">${safeDesc}</p>`;
-    const linksHtml = layoutHideLinks ? '' : `
-          <div class="mt-3 flex items-center justify-between">
-            <span class="text-xs text-primary-600 truncate max-w-[140px]" title="${safeDisplayUrl}">${escapeHTML(safeDisplayUrl)}</span>
-            <button class="copy-btn relative flex items-center px-2 py-1 ${hasValidUrl ? 'bg-accent-100 text-accent-700 hover:bg-accent-200' : 'bg-gray-200 text-gray-400 cursor-not-allowed'} rounded-full text-xs font-medium transition-colors" data-url="${escapeHTML(normalizedUrl)}" ${hasValidUrl ? '' : 'disabled'}>
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ${layoutGridCols >= '5' ? '' : 'mr-1'}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-              </svg>
-              ${layoutGridCols >= '5' ? '' : '<span class="copy-text">复制</span>'}
-              <span class="copy-success hidden absolute -top-8 right-0 bg-accent-500 text-white text-xs px-2 py-1 rounded shadow-md">已复制!</span>
-            </button>
-          </div>`;
-    const categoryHtml = layoutHideCategory ? '' : `
-                <span class="inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-xs font-medium bg-secondary-100 text-primary-700">
-                  ${safeCatalog}
-                </span>`;
     
-    const frostedClass = layoutEnableFrostedGlass ? 'frosted-glass-effect' : '';
-    const cardStyleClass = layoutCardStyle === 'style2' ? 'style-2' : '';
-    const baseCardClass = layoutEnableFrostedGlass 
-        ? 'site-card group overflow-hidden transition-all' 
-        : 'site-card group bg-white border border-primary-100/60 shadow-sm overflow-hidden';
 
-    return `
-      <div class="${baseCardClass} ${frostedClass} ${cardStyleClass}" data-id="${site.id}" data-name="${escapeHTML(site.name)}" data-url="${escapeHTML(normalizedUrl)}" data-catalog="${escapeHTML(site.catelog || site.catelog_name)}" data-desc="${safeDesc}">
-        <div class="site-card-content">
-          <a href="${escapeHTML(normalizedUrl || '#')}" ${hasValidUrl ? 'target="_blank" rel="noopener noreferrer"' : ''} class="block">
-            <div class="flex items-start">
-              <div class="site-icon flex-shrink-0 mr-4 transition-all duration-300">
-                ${
-                  logoUrl
-                    ? `<img src="${escapeHTML(logoUrl)}" alt="${safeName}" class="w-10 h-10 rounded-lg object-cover bg-gray-100">`
-                    : `<div class="w-10 h-10 rounded-lg bg-primary-600 flex items-center justify-center text-white font-semibold text-lg shadow-inner">${cardInitial}</div>`
+    let nextWallpaperIndex = 0;
+
+    if (layoutRandomWallpaper) {
+
+        try {
+
+            const cookies = request.headers.get('Cookie') || '';
+
+            const match = cookies.match(/wallpaper_index=(\d+)/);
+
+            const currentWallpaperIndex = match ? parseInt(match[1]) : -1;
+
+  
+
+            if (wallpaperSource === '360') {
+
+               const cid = wallpaperCid360 || '36';
+
+               const apiUrl = `http://cdn.apc.360.cn/index.php?c=WallPaper&a=getAppsByCategory&from=360chrome&cid=${cid}&start=0&count=8`;
+
+               const res = await fetch(apiUrl);
+
+               if (res.ok) {
+
+                   const json = await res.json();
+
+                   if (json.errno === "0" && json.data && json.data.length > 0) {
+
+                        nextWallpaperIndex = (currentWallpaperIndex + 1) % json.data.length;
+
+                        const targetItem = json.data[nextWallpaperIndex];
+
+                        let targetUrl = targetItem.url;
+
+                        console.log('360 Wallpaper URL:', targetUrl);
+
+                        if (targetUrl) {
+
+                            // Try to upgrade to HTTPS if possible to avoid mixed content
+
+                            targetUrl = targetUrl.replace('http://', 'https://');
+
+                            layoutCustomWallpaper = targetUrl;
+
+                        }
+
+                   }
+
+               }
+
+            } else {
+
+                // Default to Bing
+
+                let bingUrl = '';
+
+                if (bingCountry === 'spotlight') {
+
+                    bingUrl = 'https://peapix.com/spotlight/feed?n=7';
+
+                } else {
+
+                    bingUrl = `https://peapix.com/bing/feed?n=7&country=${bingCountry}`;
+
                 }
-              </div>
-              <div class="flex-1 min-w-0">
-                <h3 class="site-title text-base font-medium text-gray-900 truncate transition-all duration-300 origin-left" title="${safeName}">${safeName}</h3>
-                ${categoryHtml}
-              </div>
-            </div>
-            ${descHtml}
+
+                
+
+                const res = await fetch(bingUrl);
+
+                if (res.ok) {
+
+                    const data = await res.json();
+
+                    if (Array.isArray(data) && data.length > 0) {
+
+                        nextWallpaperIndex = (currentWallpaperIndex + 1) % data.length;
+
+                        const targetItem = data[nextWallpaperIndex];
+
+                        const targetUrl = targetItem.fullUrl || targetItem.url;
+
+                        if (targetUrl) {
+
+                            layoutCustomWallpaper = targetUrl;
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+        } catch (e) {
+
+            console.error('Random Wallpaper Error:', e);
+
+        }
+
+    }
+
+  
+
+    const isCustomWallpaper = Boolean(layoutCustomWallpaper);
+
+    const themeClass = isCustomWallpaper ? 'custom-wallpaper' : '';
+
+    
+
+    // Header Base Classes
+
+    let headerClass = isCustomWallpaper 
+
+        ? 'bg-transparent border-none shadow-none transition-colors duration-300' 
+
+        : 'bg-primary-700 text-white border-b border-primary-600 shadow-sm';
+
+  
+
+    let containerClass = isCustomWallpaper
+
+        ? 'rounded-2xl'
+
+        : 'rounded-2xl border border-primary-100/60 bg-white/80 backdrop-blur-sm shadow-sm';
+
+  
+
+    const titleColorClass = isCustomWallpaper ? 'text-gray-900' : 'text-white';
+
+    const subTextColorClass = isCustomWallpaper ? 'text-gray-600' : 'text-primary-100/90';
+
+    
+
+    const searchInputClass = isCustomWallpaper
+
+        ? 'bg-white/90 backdrop-blur border border-gray-200 text-gray-800 placeholder-gray-400 focus:ring-primary-200 focus:border-primary-400 focus:bg-white'
+
+        : 'bg-white/15 text-white placeholder-primary-200 focus:ring-white/30 focus:bg-white/20 border-none';
+
+    const searchIconClass = isCustomWallpaper ? 'text-gray-400' : 'text-primary-200';
+
+  
+
+    // 4. 生成动态菜单
+
+    const renderHorizontalMenu = (cats, level = 0) => {
+
+        if (!cats || cats.length === 0) return '';
+
+        
+
+        return cats.map(cat => {
+
+            const isActive = (currentCatalogName === cat.catelog);
+
+            const hasChildren = cat.children && cat.children.length > 0;
+
+            const safeName = escapeHTML(cat.catelog);
+
+            const encodedName = encodeURIComponent(cat.catelog);
+
+            const linkUrl = `?catalog=${encodedName}`;
+
+            
+
+            let html = '';
+
+            if (level === 0) {
+
+                const activeClass = isActive ? 'active' : 'inactive';
+
+                const navItemActiveClass = isActive ? 'nav-item-active' : '';
+
+                
+
+                html += `<div class="menu-item-wrapper relative inline-block text-left">`;
+
+                html += `<a href="${linkUrl}" class="nav-btn ${activeClass} ${navItemActiveClass}" data-id="${cat.id}">
+
+                            ${safeName}
+
+                            ${hasChildren ? '<svg class="w-3 h-3 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>' : ''}
+
+                         </a>`;
+
+                if (hasChildren) {
+
+                    html += `<div class="dropdown-menu">`;
+
+                    html += renderHorizontalMenu(cat.children, level + 1);
+
+                    html += `</div>`;
+
+                }
+
+                html += `</div>`;
+
+            } else {
+
+                const activeClass = isActive ? 'active' : '';
+
+                const navItemActiveClass = isActive ? 'nav-item-active' : '';
+
+                
+
+                html += `<div class="menu-item-wrapper relative block w-full">`;
+
+                html += `<a href="${linkUrl}" class="dropdown-item ${activeClass} ${navItemActiveClass}" data-id="${cat.id}">
+
+                            ${safeName}
+
+                            ${hasChildren ? '<svg class="dropdown-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>' : ''}
+
+                         </a>`;
+
+                if (hasChildren) {
+
+                    html += `<div class="dropdown-menu">`;
+
+                    html += renderHorizontalMenu(cat.children, level + 1);
+
+                    html += `</div>`;
+
+                }
+
+                html += `</div>`;
+
+            }
+
+            return html;
+
+        }).join('');
+
+    };
+
+  
+
+    const allLinkActive = !catalogExists;
+
+    const allLinkClass = allLinkActive ? 'active' : 'inactive';
+
+    const allLinkActiveMarker = allLinkActive ? 'nav-item-active' : '';
+
+    
+
+    const horizontalAllLink = `
+
+        <div class="menu-item-wrapper relative inline-block text-left">
+
+          <a href="?catalog=all" class="nav-btn ${allLinkClass} ${allLinkActiveMarker}">
+
+              全部
+
           </a>
-          ${linksHtml}
+
         </div>
-      </div>
+
     `;
-  }).join('');
+
+    
+
+    const horizontalCatalogMarkup = horizontalAllLink + renderHorizontalMenu(rootCategories);
+
+  
+
+    // Vertical Menu (Sidebar)
+
+    const renderVerticalMenu = (cats, level = 0) => {
+
+        return cats.map(cat => {
+
+            const safeName = escapeHTML(cat.catelog);
+
+            const encodedName = encodeURIComponent(cat.catelog);
+
+            const isActive = currentCatalogName === cat.catelog;
+
+            
+
+            const baseClass = "flex items-center px-3 py-2 rounded-lg w-full transition-colors duration-200";
+
+            const activeClass = isActive ? "bg-secondary-100 text-primary-700" : "hover:bg-gray-100 text-gray-700";
+
+            // Use darker icon color for custom wallpaper mode to ensure visibility
+
+            const defaultIconColor = isCustomWallpaper ? "text-gray-600" : "text-gray-400";
+
+            const iconClass = isActive ? "text-primary-600" : defaultIconColor;
+
+            const indent = level * 12; 
+
+            
+
+            let html = `
+
+              <a href="?catalog=${encodedName}" data-id="${cat.id}" class="${baseClass} ${activeClass}" style="padding-left: ${12 + indent}px">
+
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 ${iconClass}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+
+                  </svg>
+
+                  ${safeName}
+
+              </a>
+
+            `;
+
+            if (cat.children && cat.children.length > 0) {
+
+                html += renderVerticalMenu(cat.children, level + 1);
+
+            }
+
+            return html;
+
+        }).join('');
+
+    };
+
+    
+
+    const catalogLinkMarkup = renderVerticalMenu(rootCategories);
+
+  
+
+    // Sites Grid
+
+    const sitesGridMarkup = sites.map((site) => {
+
+                  const rawName = site.name || '未命名';
+
+                  const rawCatalog = site.catelog_name || '未分类';
+
+      const rawDesc = site.desc || '暂无描述';
+
+      const normalizedUrl = sanitizeUrl(site.url);
+
+      const safeDisplayUrl = normalizedUrl || '未提供链接';
+
+      const logoUrl = sanitizeUrl(site.logo);
+
+      const cardInitial = escapeHTML((rawName.trim().charAt(0) || '站').toUpperCase());
+
+      const safeName = escapeHTML(rawName);
+
+      const safeCatalog = escapeHTML(rawCatalog);
+
+      const safeDesc = escapeHTML(rawDesc);
+
+      const hasValidUrl = Boolean(normalizedUrl);
+
+  
+
+      const descHtml = layoutHideDesc ? '' : `<p class="mt-2 text-sm text-gray-600 leading-relaxed line-clamp-2" title="${safeDesc}">${safeDesc}</p>`;
+
+      const linksHtml = layoutHideLinks ? '' : `
+
+            <div class="mt-3 flex items-center justify-between">
+
+              <span class="text-xs text-primary-600 truncate max-w-[140px]" title="${safeDisplayUrl}">${escapeHTML(safeDisplayUrl)}</span>
+
+              <button class="copy-btn relative flex items-center px-2 py-1 ${hasValidUrl ? 'bg-accent-100 text-accent-700 hover:bg-accent-200' : 'bg-gray-200 text-gray-400 cursor-not-allowed'} rounded-full text-xs font-medium transition-colors" data-url="${escapeHTML(normalizedUrl)}" ${hasValidUrl ? '' : 'disabled'}>
+
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ${layoutGridCols >= '5' ? '' : 'mr-1'}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+
+                </svg>
+
+                ${layoutGridCols >= '5' ? '' : '<span class="copy-text">复制</span>'}
+
+                <span class="copy-success hidden absolute -top-8 right-0 bg-accent-500 text-white text-xs px-2 py-1 rounded shadow-md">已复制!</span>
+
+              </button>
+
+            </div>`;
+
+      const categoryHtml = layoutHideCategory ? '' : `
+
+                  <span class="inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-xs font-medium bg-secondary-100 text-primary-700">
+
+                    ${safeCatalog}
+
+                  </span>`;
+
+      
+
+      const frostedClass = layoutEnableFrostedGlass ? 'frosted-glass-effect' : '';
+
+      const cardStyleClass = layoutCardStyle === 'style2' ? 'style-2' : '';
+
+      const baseCardClass = layoutEnableFrostedGlass 
+
+          ? 'site-card group overflow-hidden transition-all' 
+
+          : 'site-card group bg-white border border-primary-100/60 shadow-sm overflow-hidden';
+
+  
+
+      return `
+
+        <div class="${baseCardClass} ${frostedClass} ${cardStyleClass}" data-id="${site.id}" data-name="${escapeHTML(site.name)}" data-url="${escapeHTML(normalizedUrl)}" data-catalog="${escapeHTML(site.catelog_name || site.catelog || '未分类')}" data-desc="${safeDesc}">
+
+          <div class="site-card-content">
+
+            <a href="${escapeHTML(normalizedUrl || '#')}" ${hasValidUrl ? 'target="_blank" rel="noopener noreferrer"' : ''} class="block">
+
+              <div class="flex items-start">
+
+                <div class="site-icon flex-shrink-0 mr-4 transition-all duration-300">
+
+                  ${
+
+                    logoUrl
+
+                      ? `<img src="${escapeHTML(logoUrl)}" alt="${safeName}" class="w-10 h-10 rounded-lg object-cover bg-gray-100">`
+
+                      : `<div class="w-10 h-10 rounded-lg bg-primary-600 flex items-center justify-center text-white font-semibold text-lg shadow-inner">${cardInitial}</div>`
+
+                  }
+
+                </div>
+
+                <div class="flex-1 min-w-0">
+
+                  <h3 class="site-title text-base font-medium text-gray-900 truncate transition-all duration-300 origin-left" title="${safeName}">${safeName}</h3>
+
+                  ${categoryHtml}
+
+                </div>
+
+              </div>
+
+              ${descHtml}
+
+            </a>
+
+            ${linksHtml}
+
+          </div>
+
+        </div>
+
+      `;
+
+    }).join('');
 
   let gridClass = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6 justify-items-center';
   if (layoutGridCols === '5') {

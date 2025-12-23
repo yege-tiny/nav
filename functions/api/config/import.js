@@ -13,13 +13,25 @@ export async function onRequestPost(context) {
     let categoriesToImport = [];
     let sitesToImport = [];
     let isNewFormat = false;
+    // 获取 override 参数，默认 false
+    const override = !!jsonData.override;
 
     // Detect import format
-    if (jsonData && typeof jsonData === 'object' && Array.isArray(jsonData.category) && Array.isArray(jsonData.sites)) {
-      categoriesToImport = jsonData.category;
-      sitesToImport = jsonData.sites;
+    // Handle the wrapper payload if it exists (due to frontend change passing { ...data, override })
+    let payload = jsonData;
+    if (jsonData.category && jsonData.sites && (jsonData.override !== undefined || Object.keys(jsonData).length > 2)) {
+         // It's the new payload wrapper
+         payload = jsonData;
+    } else if (jsonData.category && jsonData.sites) {
+        // Direct export format
+        payload = jsonData;
+    }
+
+    if (payload && typeof payload === 'object' && Array.isArray(payload.category) && Array.isArray(payload.sites)) {
+      categoriesToImport = payload.category;
+      sitesToImport = payload.sites;
       isNewFormat = true;
-    } else if (Array.isArray(jsonData)) { // Legacy format support
+    } else if (Array.isArray(jsonData)) { // Legacy format support (raw array)
       sitesToImport = jsonData;
     } else {
       return errorResponse('Invalid JSON format. Expected { "category": [...], "sites": [...] } or an array of sites.', 400);
@@ -37,8 +49,8 @@ export async function onRequestPost(context) {
     let categoryNameToIdMap = new Map(); // For legacy format mapping
     
     // 1. Fetch all existing categories from DB
-    // We need parent_id to correctly identify subcategories
-    const { results: existingDbCategories } = await db.prepare('SELECT id, catelog, parent_id FROM category').all();
+    // We need parent_id to correctly identify subcategories, and is_private for enforcement
+    const { results: existingDbCategories } = await db.prepare('SELECT id, catelog, parent_id, is_private FROM category').all();
     
     // Helper to find existing category by name and parent_id
     const findExistingCategory = (name, parentId) => {
@@ -60,14 +72,11 @@ export async function onRequestPost(context) {
         // Sort categories to ensure parents are processed before children (Topological Sort)
         let sortedCats = [];
         let remaining = [...categoriesToImport];
-        // Set of JSON-side IDs that have been "processed" (added to sorted list). 0 is root.
         let processedJsonIds = new Set([0, '0']);
         
         let lastRemainingCount = -1;
         while(remaining.length > 0) {
-            // Safety break to prevent infinite loops (e.g. cycles or missing parents)
             if (remaining.length === lastRemainingCount) {
-                // No progress made? Just push the rest and handle them as best as we can (they might end up at root)
                 sortedCats.push(...remaining);
                 break;
             }
@@ -83,54 +92,41 @@ export async function onRequestPost(context) {
                 return acc;
             }, [[], []]);
             
-            // Sort the ready batch by ID to keep deterministic order
             ready.sort((a, b) => (a.id || 0) - (b.id || 0));
-            
             ready.forEach(cat => processedJsonIds.add(cat.id));
             sortedCats.push(...ready);
             remaining = notReady;
         }
         categoriesToImport = sortedCats;
 
-        // Process sequentially to handle dependencies
         for (const cat of categoriesToImport) {
             const catName = (cat.catelog || '').trim();
             const jsonParentId = cat.parent_id || 0;
+            const isPrivate = cat.is_private ? 1 : 0; // Import privacy setting
             
-            // Resolve DB Parent ID
             let dbParentId = 0;
             if (jsonParentId !== 0) {
                 if (oldCatIdToNewCatIdMap.has(jsonParentId)) {
                     dbParentId = oldCatIdToNewCatIdMap.get(jsonParentId);
                 } else {
-                    // Parent not found? Might be skipped or out of order.
-                    // Fallback to root or handle error.
-                    // If sorted correctly, this shouldn't happen unless parent is missing.
                     dbParentId = 0;
                 }
             }
 
-            // Check if exists
             const existing = findExistingCategory(catName, dbParentId);
             
             if (existing) {
                 oldCatIdToNewCatIdMap.set(cat.id, existing.id);
             } else {
-                // Insert new
                 const sortOrder = normalizeSortOrder(cat.sort_order);
-                const result = await db.prepare('INSERT INTO category (catelog, sort_order, parent_id) VALUES (?, ?, ?)')
-                                       .bind(catName, sortOrder, dbParentId)
+                const result = await db.prepare('INSERT INTO category (catelog, sort_order, parent_id, is_private) VALUES (?, ?, ?, ?)')
+                                       .bind(catName, sortOrder, dbParentId, isPrivate)
                                        .run();
-                // Get the new ID
-                // D1 run() returns { meta: { last_row_id: ... } } or similar depending on adapter
-                // Cloudflare D1 returns meta.last_row_id
                 let newId = result.meta.last_row_id;
                 
-                // Update local cache of existing categories so children can find this new parent
-                const newCatObj = { id: newId, catelog: catName, parent_id: dbParentId };
+                const newCatObj = { id: newId, catelog: catName, parent_id: dbParentId, is_private: isPrivate };
                 if (!existingDbCategories) {
-                     // In case it was null
-                     // existingDbCategories = [newCatObj]; // const assignment error
+                     // existingDbCategories = [newCatObj]; 
                 } else {
                     existingDbCategories.push(newCatObj);
                 }
@@ -142,29 +138,30 @@ export async function onRequestPost(context) {
         if (existingDbCategories) {
              existingDbCategories.forEach(c => categoryNameToIdMap.set(c.catelog, c.id));
         }
-        // Legacy format: Extract categories from the sites array itself
         const defaultCategory = 'Default';
         const categoryNames = [...new Set(sitesToImport.map(item => (item.catelog || defaultCategory).trim()))].filter(name => name);
         const newCategoryNames = categoryNames.filter(name => !categoryNameToIdMap.has(name));
 
         if (newCategoryNames.length > 0) {
-            const insertStmts = newCategoryNames.map(name => db.prepare('INSERT INTO category (catelog) VALUES (?)').bind(name));
+            // Legacy import doesn't have is_private info, defaults to 0
+            const insertStmts = newCategoryNames.map(name => db.prepare('INSERT INTO category (catelog, is_private) VALUES (?, 0)').bind(name));
             await db.batch(insertStmts);
             
-            // Fetch new IDs in batches
             for (let i = 0; i < newCategoryNames.length; i += BATCH_SIZE) {
                 const chunk = newCategoryNames.slice(i, i + BATCH_SIZE);
                 const placeholders = chunk.map(() => '?').join(',');
-                const { results: newCategories } = await db.prepare(`SELECT id, catelog FROM category WHERE catelog IN (${placeholders})`).bind(...chunk).all();
+                const { results: newCategories } = await db.prepare(`SELECT id, catelog, is_private FROM category WHERE catelog IN (${placeholders})`).bind(...chunk).all();
                 if (newCategories) {
-                    newCategories.forEach(c => categoryNameToIdMap.set(c.catelog, c.id));
+                    newCategories.forEach(c => {
+                        categoryNameToIdMap.set(c.catelog, c.id);
+                        existingDbCategories.push(c); // Update local cache
+                    });
                 }
             }
         }
     }
 
     // --- Site Processing ---
-    // 1. Get all URLs from the import list to check for existence in one go
     const siteUrls = sitesToImport.map(item => (item.url || '').trim()).filter(url => url);
     const existingSiteUrls = new Set();
     if (siteUrls.length > 0) {
@@ -178,8 +175,9 @@ export async function onRequestPost(context) {
         }
     }
 
-    const siteInsertStmts = [];
+    const batchStmts = [];
     let itemsAdded = 0;
+    let itemsUpdated = 0;
     let itemsSkipped = 0;
     const iconAPI = env.ICON_API || 'https://favicon.im/';
 
@@ -187,45 +185,47 @@ export async function onRequestPost(context) {
         const sanitizedUrl = (site.url || '').trim();
         const sanitizedName = (site.name || '').trim();
 
-        // Stricter validation: skip if essential fields are missing
         if (!sanitizedUrl || !sanitizedName) {
             itemsSkipped++;
             continue;
         }
         if (isNewFormat && (site.catelog_id === undefined || site.catelog_id === null)) {
             itemsSkipped++;
-            continue; // Skip if catelog_id is missing in new format
+            continue;
         }
 
-        // If URL already exists, skip this item as requested
-        if (existingSiteUrls.has(sanitizedUrl)) {
+        const exists = existingSiteUrls.has(sanitizedUrl);
+        if (exists && !override) {
             itemsSkipped++;
             continue;
         }
 
         let newCatId;
-        let catNameForDb; // We need the name for the sites table redundancy
+        let catNameForDb; 
+        let catIsPrivate = 0;
 
         if (isNewFormat) {
-            // Map category using the old ID from the file
             newCatId = oldCatIdToNewCatIdMap.get(site.catelog_id);
-            // Find the name from existingDbCategories (which we updated with new inserts)
             const catObj = existingDbCategories.find(c => c.id === newCatId);
-            if (catObj) catNameForDb = catObj.catelog;
+            if (catObj) {
+                catNameForDb = catObj.catelog;
+                catIsPrivate = catObj.is_private || 0;
+            }
         } else {
-            // Map category by name for legacy format
             const catName = (site.catelog || 'Default').trim();
             newCatId = categoryNameToIdMap.get(catName);
             catNameForDb = catName;
+            const catObj = existingDbCategories.find(c => c.id === newCatId);
+             if (catObj) {
+                catIsPrivate = catObj.is_private || 0;
+            }
         }
 
-        // If category could not be mapped, skip the site
         if (!newCatId) {
             itemsSkipped++;
             continue;
         }
 
-        // Auto-generate logo if it's missing or is a data URI
         let sanitizedLogo = (site.logo || '').trim();
         if ((!sanitizedLogo || sanitizedLogo.startsWith('data:image')) && sanitizedUrl.startsWith('http')) {
             const domain = sanitizedUrl.replace(/^https?:\/\//, '').split('/')[0];
@@ -235,22 +235,47 @@ export async function onRequestPost(context) {
 
         const sanitizedDesc = (site.desc || '').trim() || null;
         const sortOrderValue = normalizeSortOrder(site.sort_order);
+        
+        // Handle Privacy Logic
+        let finalIsPrivate = site.is_private ? 1 : 0;
+        // Force private if category is private
+        if (catIsPrivate === 1) {
+            finalIsPrivate = 1;
+        }
 
-        siteInsertStmts.push(
-            db.prepare('INSERT INTO sites (name, url, logo, desc, catelog_id, catelog_name, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)')
-              .bind(sanitizedName, sanitizedUrl, sanitizedLogo, sanitizedDesc, newCatId, catNameForDb, sortOrderValue)
-        );
-        itemsAdded++;
+        if (exists && override) {
+            // Update
+            batchStmts.push(
+                db.prepare('UPDATE sites SET name=?, logo=?, desc=?, catelog_id=?, catelog_name=?, sort_order=?, is_private=?, update_time=CURRENT_TIMESTAMP WHERE url=?')
+                  .bind(sanitizedName, sanitizedLogo, sanitizedDesc, newCatId, catNameForDb, sortOrderValue, finalIsPrivate, sanitizedUrl)
+            );
+            itemsUpdated++;
+        } else {
+            // Insert
+            batchStmts.push(
+                db.prepare('INSERT INTO sites (name, url, logo, desc, catelog_id, catelog_name, sort_order, is_private) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                  .bind(sanitizedName, sanitizedUrl, sanitizedLogo, sanitizedDesc, newCatId, catNameForDb, sortOrderValue, finalIsPrivate)
+            );
+            itemsAdded++;
+        }
     }
 
-    // Batch insert all new sites
-    if (siteInsertStmts.length > 0) {
-        await db.batch(siteInsertStmts);
+    if (batchStmts.length > 0) {
+        // Execute in batches to respect D1 limits
+        for (let i = 0; i < batchStmts.length; i += BATCH_SIZE) {
+            const chunk = batchStmts.slice(i, i + BATCH_SIZE);
+            await db.batch(chunk);
+        }
     }
+
+    let msg = `导入完成。`;
+    if (itemsAdded > 0) msg += ` 新增 ${itemsAdded} 个`;
+    if (itemsUpdated > 0) msg += ` 更新 ${itemsUpdated} 个`;
+    if (itemsSkipped > 0) msg += ` 跳过 ${itemsSkipped} 个`;
 
     return jsonResponse({
         code: 201,
-        message: `导入完成。成功添加 ${itemsAdded} 个书签，跳过 ${itemsSkipped} 个（已存在或数据不完整）。`
+        message: msg
     }, 201);
 
   } catch (error) {

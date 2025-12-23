@@ -19,13 +19,19 @@ export async function onRequestGet(context) {
   if (!columnsChecked) {
       try {
           await env.NAV_DB.prepare("SELECT parent_id FROM category LIMIT 1").first();
+          try {
+             await env.NAV_DB.prepare("SELECT is_private FROM category LIMIT 1").first();
+          } catch (e) {
+             await env.NAV_DB.prepare("ALTER TABLE category ADD COLUMN is_private INTEGER DEFAULT 0").run();
+          }
           columnsChecked = true;
       } catch (e) {
           try {
               await env.NAV_DB.prepare("ALTER TABLE category ADD COLUMN parent_id INTEGER DEFAULT 0").run();
+              await env.NAV_DB.prepare("ALTER TABLE category ADD COLUMN is_private INTEGER DEFAULT 0").run();
               columnsChecked = true;
           } catch (e2) {
-              console.error("Failed to add parent_id", e2);
+              console.error("Failed to add columns", e2);
           }
       }
   }
@@ -37,7 +43,7 @@ export async function onRequestGet(context) {
 
   try {
     const { results } = await env.NAV_DB.prepare(`
-        SELECT c.id, c.catelog, c.sort_order, c.parent_id, COUNT(s.id) AS site_count
+        SELECT c.id, c.catelog, c.sort_order, c.parent_id, c.is_private, COUNT(s.id) AS site_count
         FROM category c
         LEFT JOIN sites s ON c.id = s.catelog_id
         GROUP BY c.id, c.catelog, c.sort_order, c.parent_id
