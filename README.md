@@ -27,9 +27,9 @@
 | :---: | :---: |
 | ![首页预览](https://github.com/user-attachments/assets/e77d1c10-aba4-4755-8a62-416fe3a8239e) | ![后台预览](https://github.com/user-attachments/assets/b2508b55-bbf6-4998-a111-a7b75eb8686b) |
 
-| 简洁风格|
-| :---: |
-| ![首页预览](https://github.com/user-attachments/assets/3a70b18a-5301-4218-a75f-869fbbdaa7a4)||
+| 简洁风格 | 夜间模式 |
+| :---: | :---: |
+| ![首页预览](https://github.com/user-attachments/assets/3a70b18a-5301-4218-a75f-869fbbdaa7a4)| ![后台预览](https://github.com/user-attachments/assets/9e51cf5c-4064-4b8d-ad2c-e0ca9e006834) |
 > 卡片的毛玻璃效果和程度可以在后台设置里自定义。后台设置页面为url后加 /admin
 ## ✨ 核心特性
 
@@ -43,6 +43,7 @@
 - 📤 **数据管理**：支持书签数据的导入与导出，格式兼容，方便迁移。
 
 ## 更新日志
+- 12-25 增加夜间模式，首页设置增加记住上次选择分类
 - 12-23 增加私密分类，导入和导出支持私密书签和分类，导入增加覆盖选项和预览框
 - 12-20 增加卡片风格设置，首页设置，允许自定义字体，字体大小，颜色，增加首页外部搜索开关
 - 12-19 增加360壁纸（速度较慢，轮询推荐bing），分类支持多级分类
