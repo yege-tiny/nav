@@ -21,6 +21,18 @@ document.addEventListener('DOMContentLoaded', function() {
   closeSidebar?.addEventListener('click', closeSidebarMenu);
   mobileOverlay?.addEventListener('click', closeSidebarMenu);
   
+  // Clean up initial server-side rendered cards animation
+  const initialCards = document.querySelectorAll('.site-card.card-anim-enter');
+  initialCards.forEach(card => {
+      card.addEventListener('animationend', () => {
+          card.classList.remove('card-anim-enter');
+          // Clean up inline animation-delay style if present
+          if (card.style.animationDelay) {
+              card.style.removeProperty('animation-delay');
+          }
+      }, { once: true });
+  });
+  
   // ========== 复制链接功能 ==========
   document.querySelectorAll('.copy-btn').forEach(btn => {
     btn.addEventListener('click', function(e) {
@@ -177,40 +189,52 @@ document.addEventListener('DOMContentLoaded', function() {
   // ========== 搜索功能 ==========
   const searchInputs = document.querySelectorAll('.search-input-target');
   const sitesGrid = document.getElementById('sitesGrid');
-  let currentSearchEngine = 'local'; // Default to local
+  let currentSearchEngine = localStorage.getItem('search_engine') || 'local'; // Load from storage or default to local
+
+  // Initialize Search Engine UI based on saved preference
+  const engineOptions = document.querySelectorAll('.search-engine-option');
+  
+  function updateSearchEngineUI(engine) {
+      // Update Active Class
+      engineOptions.forEach(opt => {
+          if (opt.dataset.engine === engine) {
+              opt.classList.add('active');
+          } else {
+              opt.classList.remove('active');
+          }
+      });
+      
+      // Update Placeholder
+      let placeholder = '搜索书签...';
+      switch (engine) {
+          case 'google': placeholder = 'Google 搜索...'; break;
+          case 'baidu': placeholder = '百度搜索...'; break;
+          case 'bing': placeholder = 'Bing 搜索...'; break;
+      }
+      
+      searchInputs.forEach(input => {
+          input.placeholder = placeholder;
+          // If switching back to local, trigger filter immediately if input has value
+          if (engine === 'local' && input.value.trim()) {
+              input.dispatchEvent(new Event('input'));
+          }
+      });
+  }
+
+  // Apply initial state
+  if (engineOptions.length > 0) {
+      updateSearchEngineUI(currentSearchEngine);
+  }
 
   // Search Engine Switching Logic
-  const engineOptions = document.querySelectorAll('.search-engine-option');
   engineOptions.forEach(option => {
       option.addEventListener('click', () => {
           currentSearchEngine = option.dataset.engine;
+          localStorage.setItem('search_engine', currentSearchEngine); // Save to storage
+          updateSearchEngineUI(currentSearchEngine);
           
-          // Update UI: Sync all option sets (desktop/mobile)
-          const allOptions = document.querySelectorAll('.search-engine-option');
-          allOptions.forEach(opt => {
-              if (opt.dataset.engine === currentSearchEngine) {
-                  opt.classList.add('active');
-              } else {
-                  opt.classList.remove('active');
-              }
-          });
-          
-          // Update Placeholder
-          let placeholder = '搜索书签...';
-          switch (currentSearchEngine) {
-              case 'google': placeholder = 'Google 搜索...'; break;
-              case 'baidu': placeholder = '百度搜索...'; break;
-              case 'bing': placeholder = 'Bing 搜索...'; break;
-          }
-          
-          searchInputs.forEach(input => {
-              input.placeholder = placeholder;
-              input.focus();
-              // If switching back to local, trigger filter immediately
-              if (currentSearchEngine === 'local') {
-                  input.dispatchEvent(new Event('input'));
-              }
-          });
+          // Focus input after switch
+          searchInputs.forEach(input => input.focus());
       });
   });
   
@@ -486,34 +510,60 @@ document.addEventListener('DOMContentLoaded', function() {
     sitesGrid.style.opacity = '0';
 
     try {
-        let apiUrl = '/api/config?pageSize=10000';
-        if (catalogId) {
-            apiUrl += `&catalogId=${catalogId}`;
+        // 如果没有预加载数据，回退到普通跳转
+        if (!window.IORI_SITES) {
+            window.location.href = href;
+            return;
         }
-        
-        const res = await fetch(apiUrl);
-        if (!res.ok) throw new Error('网络请求失败');
-        const data = await res.json();
-        
-        if (data.code !== 200) throw new Error(data.message || 'API 错误');
-        
-        await new Promise(resolve => setTimeout(resolve, 150));
+
+        await new Promise(resolve => setTimeout(resolve, 50));
 
         sitesGrid.style.transition = 'none';
         sitesGrid.style.opacity = '1';
 
-        renderSites(data.data);
-        updateHeading(null, catalogId ? catalogName : null, data.data.length);
-        updateNavigationState(href);
+        const allSites = window.IORI_SITES || [];
+        let filteredSites = [];
+
+        if (catalogId) {
+            // catalogId 是字符串，site.catelog_id 是数字，需转换
+            filteredSites = allSites.filter(site => String(site.catelog_id) === String(catalogId));
+        } else {
+            // catalogId 为空表示“全部”
+            filteredSites = allSites;
+        }
+
+        renderSites(filteredSites);
+        updateHeading(null, catalogId ? catalogName : null, filteredSites.length);
+        updateNavigationState(catalogId);
+
+        // Remember Last Category Logic
+        const config = window.IORI_LAYOUT_CONFIG || {};
+        if (config.rememberLastCategory) {
+             if (catalogId) {
+                 localStorage.setItem('iori_last_category', catalogId);
+                 setCookie('iori_last_category', catalogId, 365);
+             } else {
+                 localStorage.removeItem('iori_last_category'); // "All" or empty
+                 setCookie('iori_last_category', '', -1);
+             }
+        }
 
     } catch (err) {
-        console.error('导航跳转失败:', err);
-        window.location.href = href;
+        console.error('Client-side navigation failed:', err);
     }
   });
 
+  function setCookie(name, value, days) {
+      let expires = "";
+      if (days) {
+          const date = new Date();
+          date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+          expires = "; expires=" + date.toUTCString();
+      }
+      document.cookie = name + "=" + (value || "")  + expires + "; path=/; SameSite=Lax";
+  }
+
   function renderSites(sites) {
-    console.log('renderSites sites:', sites);
       const sitesGrid = document.getElementById('sitesGrid');
       if (!sitesGrid) return;
       
@@ -541,7 +591,6 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       sites.forEach((site, index) => {
-        console.log('[Debug] Rendering site:', site);
         const safeName = escapeHTML(site.name || '未命名');
         const safeUrl = normalizeUrl(site.url);
         const safeDesc = escapeHTML(site.desc || '暂无描述');
@@ -587,17 +636,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (delay > 0) {
             card.style.animationDelay = `${delay}ms`;
         }
-        card.style.pointerEvents = 'none'; // Prevent hover during animation
         
-        // Fix: Remove animation class and style after completion to restore hover effects
+        // Remove animation class after completion to ensure clean state
         card.addEventListener('animationend', () => {
             card.classList.remove('card-anim-enter');
-            // Force reflow to ensure clean state transition
-            void card.offsetWidth;
-            // Delay enabling interaction by one frame to ensure transition property is active before hover
-            requestAnimationFrame(() => {
-                card.removeAttribute('style');
-            });
+            // Force reflow not strictly necessary if we just remove class, but good for safety
+            // Remove style attribute only if we set delay
+            if (delay > 0) card.style.removeProperty('animation-delay');
         }, { once: true });
         
         card.setAttribute('data-name', safeName);
@@ -649,7 +694,7 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   }
 
-  function updateNavigationState(href) {
+  function updateNavigationState(catalogId) {
       // 1. Reset everything to main container first
       if (resetNav) resetNav();
       
@@ -658,8 +703,11 @@ document.addEventListener('DOMContentLoaded', function() {
       if (navContainer) {
           const links = navContainer.querySelectorAll('a.nav-btn, a.dropdown-item');
           links.forEach(link => {
-              const linkHref = link.getAttribute('href');
-              if (linkHref === href) {
+              const linkId = link.getAttribute('data-id');
+              // 如果 catalogId 为空且 link 没有 data-id，或者 ID 匹配
+              const isActive = (!catalogId && !linkId) || (String(linkId) === String(catalogId));
+              
+              if (isActive) {
                   link.classList.remove('inactive');
                   link.classList.add('active', 'nav-item-active');
               } else {
@@ -669,14 +717,15 @@ document.addEventListener('DOMContentLoaded', function() {
               link.dataset.originalClass = link.className;
           });
           
-          // Parent highlighting
+          // Parent highlighting (横向菜单的父级高亮)
           const topWrappers = Array.from(navContainer.children);
           topWrappers.forEach(wrapper => {
               const topLink = wrapper.querySelector(':scope > a.nav-btn'); 
               if (!topLink) return;
               
-              if (href !== topLink.getAttribute('href')) {
-                  const subLink = wrapper.querySelector(`a[href="${href}"]`);
+              const topLinkId = topLink.getAttribute('data-id');
+              if (String(topLinkId) !== String(catalogId)) {
+                  const subLink = wrapper.querySelector(`a[data-id="${catalogId}"]`);
                   if (subLink) {
                       topLink.classList.remove('inactive');
                       topLink.classList.add('active', 'nav-item-active');
@@ -692,26 +741,29 @@ document.addEventListener('DOMContentLoaded', function() {
       // Update Sidebar (Vertical Menu)
       const sidebar = document.getElementById('sidebar');
       if (sidebar) {
-          const links = sidebar.querySelectorAll('a[href^="?catalog="]');
+          const links = sidebar.querySelectorAll('a[data-id], a[href="?catalog=all"]');
           links.forEach(link => {
                const svg = link.querySelector('svg');
-               if (link.getAttribute('href') === href) {
+               const linkId = link.getAttribute('data-id');
+               const isActive = (!catalogId && !linkId) || (String(linkId) === String(catalogId));
+
+               if (isActive) {
                    // Active state
-                   link.classList.remove('hover:bg-gray-100', 'text-gray-700');
-                   link.classList.add('bg-secondary-100', 'text-primary-700');
+                   link.classList.remove('hover:bg-gray-100', 'text-gray-700', 'dark:hover:bg-gray-800', 'dark:text-gray-300');
+                   link.classList.add('bg-secondary-100', 'text-primary-700', 'dark:bg-gray-800', 'dark:text-primary-400');
                    
                    if (svg) {
-                       svg.classList.remove('text-gray-400');
-                       svg.classList.add('text-primary-600');
+                       svg.classList.remove('text-gray-400', 'dark:text-gray-500');
+                       svg.classList.add('text-primary-600', 'dark:text-primary-400');
                    }
                } else {
                    // Inactive state
-                   link.classList.remove('bg-secondary-100', 'text-primary-700');
-                   link.classList.add('hover:bg-gray-100', 'text-gray-700');
+                   link.classList.remove('bg-secondary-100', 'text-primary-700', 'dark:bg-gray-800', 'dark:text-primary-400');
+                   link.classList.add('hover:bg-gray-100', 'text-gray-700', 'dark:text-gray-300', 'dark:hover:bg-gray-800');
                    
                    if (svg) {
-                       svg.classList.remove('text-primary-600');
-                       svg.classList.add('text-gray-400');
+                       svg.classList.remove('text-primary-600', 'dark:text-primary-400');
+                       svg.classList.add('text-gray-400', 'dark:text-gray-500');
                    }
                }
           });
@@ -728,5 +780,48 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!url) return '';
       if (url.startsWith('http')) return url;
       return 'https://' + url;
+  }
+
+  // Auto-restore Last Category
+  (function() {
+      const config = window.IORI_LAYOUT_CONFIG || {};
+      const urlParams = new URLSearchParams(window.location.search);
+      const hasCatalogParam = urlParams.has('catalog');
+      
+      if (config.rememberLastCategory && !hasCatalogParam) {
+          const lastId = localStorage.getItem('iori_last_category');
+          if (lastId) {
+              // Try to find the category link in DOM to get correct Name and Href
+              const link = document.querySelector(`a[data-id="${lastId}"]`);
+              
+              if (link) {
+                  const href = link.getAttribute('href');
+                  // Clone logic from click handler
+                  // Note: link.textContent might contain garbage if it has icons.
+                  // But updateHeading handles it? No, we should be careful.
+                  // main.js click handler uses: let catalogName = link.textContent.trim();
+                  let catalogName = link.innerText.trim(); 
+                  
+                  const allSites = window.IORI_SITES || [];
+                  const filteredSites = allSites.filter(site => String(site.catelog_id) === String(lastId));
+                  
+                  renderSites(filteredSites);
+                  updateHeading(null, catalogName, filteredSites.length);
+                  updateNavigationState(lastId);
+              } else {
+                  localStorage.removeItem('iori_last_category');
+              }
+          }
+      }
+  })();
+
+  // Theme Toggle Logic
+  const themeToggleBtn = document.getElementById('themeToggleBtn');
+  if (themeToggleBtn) {
+      themeToggleBtn.addEventListener('click', () => {
+          document.documentElement.classList.toggle('dark');
+          const isDark = document.documentElement.classList.contains('dark');
+          localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      });
   }
 });

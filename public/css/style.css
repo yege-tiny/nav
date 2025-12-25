@@ -2,6 +2,7 @@
 :root {
   --card-padding: 1.25rem; /* 20px, default p-5 */
   --card-radius: 0.75rem;  /* 12px, default rounded-xl */
+  --frosted-glass-blur: 15px; /* Default blur */
 }
 
 ::-webkit-scrollbar {
@@ -10,8 +11,7 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #edf1f7;
-  border-radius: 10px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -23,461 +23,373 @@
   background: #416d9d;
 }
 
-/* 卡片悬停效果 */
+/* Dark Mode Scrollbar */
+.dark ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* ========================================= */
+/*  Dark Mode & Wallpaper Optimizations      */
+/* ========================================= */
+
+/* 1. 背景压暗 (仅在有壁纸且夜间模式时) */
+html.dark body.custom-wallpaper::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.6); /* 60% 黑色遮罩 */
+    z-index: -1;
+    pointer-events: none;
+    transition: background-color 0.3s ease;
+}
+
+/* 2. 侧边栏深色玻璃化 */
+html.dark body.custom-wallpaper .sidebar {
+    background-color: rgba(17, 24, 39, 0.85) !important;
+    backdrop-filter: blur(var(--frosted-glass-blur, 15px));
+    -webkit-backdrop-filter: blur(var(--frosted-glass-blur, 15px));
+    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 3. 卡片基础与悬停样式 */
 .site-card {
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   will-change: transform;
-  border-radius: var(--card-radius);
+  border-radius: var(--card-radius) !important; /* 强制应用后台设置的圆角 */
   width: 100%;
-  max-width: 350px;
-  margin: 0 auto;
+  height: 100%; /* 撑满 Grid 单元高度 */
+  display: flex;
+  flex-direction: column;
 }
 
 .site-card-content {
   padding: var(--card-padding);
+  flex: 1; /* 占据卡片所有垂直空间 */
+  display: flex;
+  flex-direction: column;
+}
+
+.site-card-content a {
+    /* flex: 1; Removed to compact height */
+    display: flex;
+    flex-direction: column;
+}
+
+/* 让描述部分撑开，确保底部链接行对齐 */
+.site-card p, .site-card .preview-desc {
+    /* flex: 1; Removed to reduce height */
+    margin-bottom: 0;
+    /* 强制两行高度: line-height (relaxed=1.625) * 2 lines * font-size (sm=0.875rem) ≈ 2.85rem */
+    height: 2.85rem;
 }
 
 .site-card:hover {
   transform: scale(1.15) translateY(-10px);
   box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
-  z-index: 10;
-  border: 2px solid #416d9d;
+  z-index: 30;
+  border: 2px solid #416d9d !important;
 }
 
-/* 风格一 (默认): 图标消失动画 */
+/* 夜间模式卡片 - 仅在开启毛玻璃时应用半透明 */
+.dark .site-card.frosted-glass-effect {
+    background-color: rgba(30, 41, 59, 0.4) !important;
+    backdrop-filter: blur(var(--frosted-glass-blur, 15px));
+    -webkit-backdrop-filter: blur(var(--frosted-glass-blur, 15px));
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+}
+
+/* 确保实色模式下也有边框颜色 */
+.dark .site-card:not(.frosted-glass-effect) {
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.dark .site-card:hover {
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.dark .site-card-content h3 {
+    color: #f3f4f6 !important;
+}
+
+.dark .site-card-content p {
+    color: #9ca3af !important;
+}
+
+.dark .site-card-content .text-primary-600 {
+    color: #60a5fa !important;
+}
+
+/* 4. 头部/容器深色化 */
+.dark header {
+    background-color: transparent !important;
+}
+
+/* 搜索框深色化 */
+.dark input[type="text"].search-input-target {
+    background-color: rgba(0, 0, 0, 0.4) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #fff !important;
+    backdrop-filter: blur(8px);
+}
+.dark input[type="text"].search-input-target::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+.dark input[type="text"].search-input-target:focus {
+    background-color: rgba(0, 0, 0, 0.6) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* 5. 分类标签深色化 */
+.dark .site-card .inline-flex {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: #d1d5db !important;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* 6. 下拉菜单深色化 */
+.dark .dropdown-menu {
+    background-color: rgba(31, 41, 55, 0.95) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #e5e7eb;
+}
+.dark .dropdown-item {
+    color: #d1d5db;
+}
+.dark .dropdown-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+.dark .dropdown-item.active {
+    background-color: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+}
+
+/* 7. 导航按钮样式 */
+.nav-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem;
+  line-height: 1.25rem; font-weight: 500; white-space: nowrap;
+  transition: all 0.2s ease; border: 1px solid transparent;
+  cursor: pointer; text-decoration: none; height: 2.5rem;
+}
+
+.nav-btn.inactive {
+  background-color: rgba(255, 255, 255, 0.15); color: white; backdrop-filter: blur(4px);
+}
+.nav-btn.inactive:hover { background-color: rgba(255, 255, 255, 0.25); }
+
+.custom-wallpaper .nav-btn.inactive {
+  background-color: rgba(255, 255, 255, 0.7); color: #374151; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+.custom-wallpaper .nav-btn.inactive:hover { background-color: white; color: #2563eb; }
+
+.nav-btn.active {
+  background-color: white; color: #1d4ed8; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); font-weight: 600;
+}
+.dark .nav-btn.active {
+  background-color: rgba(59, 130, 246, 0.2) !important;
+  color: #60a5fa !important;
+  border: 1px solid rgba(59, 130, 246, 0.4) !important;
+}
+.custom-wallpaper .nav-btn.active { background-color: #2563eb; color: white; }
+.dark.custom-wallpaper .nav-btn.active { background-color: #2563eb !important; color: white !important; }
+
+/* 风格一图标动画 */
 .site-card:not(.style-2) .site-icon {
-  width: 2.5rem;
-  margin-right: 1rem;
-  opacity: 1;
+  width: 2.5rem; margin-right: 1rem; opacity: 1;
 }
-
 .site-card:not(.style-2):hover .site-icon {
-  width: 0;
-  margin-right: 0;
-  opacity: 0;
-  transition-delay: 0.1s;
+  width: 0; margin-right: 0; opacity: 0; transition-delay: 0.1s;
 }
+.site-card:not(.style-2) .site-title { transform-origin: left center; }
+.site-card:not(.style-2):hover .site-title { transform: scale(1.2); transition-delay: 0.1s; }
 
-/* 风格一 (默认): 标题放大动画 */
-.site-card:not(.style-2) .site-title {
-  transform-origin: left center;
-}
+/* 风格二 (垂直布局) */
+.site-card.style-2 .flex.items-start { flex-direction: column; align-items: center; text-align: center; }
+.site-card.style-2 .site-icon { margin-right: 0; margin-bottom: 0.5rem; width: 3rem; height: 3rem; transition: transform 0.3s ease; }
+.site-card.style-2:hover .site-icon { transform: scale(1.1); }
+.site-card.style-2 .site-icon img, .site-card.style-2 .site-icon div { margin: 0 auto; }
+.site-card.style-2 .site-title { text-align: center; margin-bottom: 0.25rem; display: block; width: 100%; }
+.site-card.style-2 .flex-1 { width: 100%; display: flex; flex-direction: column; align-items: center; }
+.site-card.style-2 .inline-flex { margin-top: 0.25rem; margin-bottom: 0.5rem; }
+.site-card.style-2 p { text-align: center; margin-top: 0.5rem; }
+.site-card.style-2 .mt-3.flex { margin-top: auto; justify-content: space-between; padding-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.05); }
+.dark .site-card.style-2 .mt-3.flex { border-top: 1px solid rgba(255,255,255,0.1); }
 
-.site-card:not(.style-2):hover .site-title {
-  transform: scale(1.2);
-  transition-delay: 0.1s;
-}
-
-/* ========================================= */
-/* 风格二 (Style 2): 垂直布局 */
-/* ========================================= */
-.site-card.style-2 .flex.items-start {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-}
-
-.site-card.style-2 .site-icon {
-    margin-right: 0;
-    margin-bottom: 0.5rem;
-    width: 3rem; /* 稍大一点 */
-    height: 3rem;
-    transition: transform 0.3s ease;
-}
-
-.site-card.style-2:hover .site-icon {
-    transform: scale(1.1);
-}
-
-/* 图标居中显示 */
-.site-card.style-2 .site-icon img,
-.site-card.style-2 .site-icon div {
-    margin: 0 auto;
-}
-
-.site-card.style-2 .site-title {
-    text-align: center;
-    margin-bottom: 0.25rem;
-    display: block;
-    width: 100%;
-}
-
-/* 分类标签居中 */
-.site-card.style-2 .flex-1 {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.site-card.style-2 .inline-flex {
-    margin-top: 0.25rem;
-    margin-bottom: 0.5rem;
-}
-
-/* 描述两行居中 */
-.site-card.style-2 p {
-    text-align: center;
-    margin-top: 0.5rem;
-}
-
-/* 链接行 */
-.site-card.style-2 .mt-3.flex {
-    margin-top: 0.75rem;
-    justify-content: space-between; /* 保持左右分布，或者可以用 center */
-    padding-top: 0.5rem;
-    border-top: 1px solid rgba(0,0,0,0.05); /* 可选：加个分割线 */
-}
-
-/* 复制成功提示动画 */
+/* 复制提示 */
 @keyframes fadeInOut {
   0% { opacity: 0; transform: translateY(10px); }
   20% { opacity: 1; transform: translateY(0); }
   80% { opacity: 1; transform: translateY(0); }
   100% { opacity: 0; transform: translateY(-10px); }
 }
+.copy-success-animation { animation: fadeInOut 2s ease forwards; }
 
-.copy-success-animation {
-  animation: fadeInOut 2s ease forwards;
-}
-
-/* 移动端侧边栏 */
-@media (max-width: 1023px) {
-  .mobile-sidebar {
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
-  }
-  
-  .mobile-sidebar.open {
-    transform: translateX(0);
-  }
-  
-  .mobile-overlay {
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease;
-  }
-  
-  .mobile-overlay.open {
-    opacity: 1;
-    pointer-events: auto;
-  }
-}
-
-/* 多行文本截断 */
-.line-clamp-2 {
-  display: -webkit-box !important;
-  -webkit-line-clamp: 2 !important;
-  -webkit-box-orient: vertical !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  word-break: break-word;
-}
-
-/* 侧边栏控制 */
-#sidebar-toggle {
-  display: none;
-}
-
-@media (min-width: 1024px) {
-  #sidebar-toggle:checked ~ .sidebar {
-    margin-left: -16rem;
-  }
-  
-  #sidebar-toggle:checked ~ .main-content {
-    margin-left: 0;
-  }
-}
-
-/* 根据 submission_enabled 控制按钮显示 */
-[data-submission="false"] #addSiteBtnSidebar {
-  display: none;
-}
-
-[data-submission="false"]::after {
-  content: "访客书签提交功能已关闭";
-  display: block;
-  width: 100%;
-  padding: 0.75rem 1rem;
-  font-size: 0.75rem;
-  color: #416d9d;
-  background-color: white;
-  border: 1px solid #f6ede1;
-  border-radius: 0.5rem;
-}
-
-/* 毛玻璃效果 */
-.frosted-glass-effect {
-  background: rgba(255, 255, 255, 0.5) !important;
-  backdrop-filter: blur(var(--frosted-glass-blur, 15px)) !important;
-  -webkit-backdrop-filter: blur(var(--frosted-glass-blur, 15px)) !important;
-  border: 1px solid rgba(255, 255, 255, 0.4) !important;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05) !important;
-  /* border-radius already set by site-card */
-}
-
-.frosted-glass-effect:hover {
-  background: rgba(255, 255, 255, 0.7) !important;
-  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15) !important;
-  border: 1px solid rgba(255, 255, 255, 0.8) !important;
-}
-
-/* 卡片进入动画 */
+/* 卡片加载动画 */
 @keyframes cardEnter {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-
 .card-anim-enter {
-  animation: cardEnter 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-  opacity: 0;
+  animation: cardEnter 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  opacity: 0; /* 初始状态不可见 */
 }
 
-@media (max-width: 410px) {
-  .site-card .site-card-content {
-    padding: 0.75rem !important;
-  }
-
-  .site-card .flex.items-start {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-
-  .site-card .site-icon {
-    margin-right: 0;
-    margin-bottom: 0.5rem;
-    width: 2.5rem; 
-    height: 2.5rem;
-  }
-
-  .site-card .flex-1 {
-    width: 100%;
-  }
-
-  .site-card .site-title {
-    text-align: center;
-    width: 100%;
-  }
-
-  .copy-text {
-    display: none;
-  }
-  
-  .copy-btn svg {
-    margin-right: 0 !important;
-  }
-}
-
-/* ========================================= */
-/* 导航栏与下拉菜单统一样式 */
-/* ========================================= */
-
-.menu-item-wrapper {
-  position: relative;
-  display: inline-block;
-}
-
-/* 统一的导航按钮样式 (Base Nav Button) */
-.nav-btn {
+/* 搜索引擎切换选项 - 胶囊按钮样式 */
+.search-engine-option {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5rem 1rem;
-  border-radius: 9999px; /* rounded-full */
-  font-size: 0.875rem; /* text-sm */
+  padding: 0.25rem 0.75rem; /* 稍微比分类按钮小一点 */
+  border-radius: 9999px;
+  font-size: 0.875rem;
   line-height: 1.25rem;
   font-weight: 500;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-  border: 1px solid transparent; /* Prevent layout shift on border change */
   cursor: pointer;
-  text-decoration: none;
-  height: 2.5rem; /* 固定高度，确保对齐 */
-}
-
-/* 默认状态 (未激活) */
-.nav-btn.inactive {
-  background-color: rgba(255, 255, 255, 0.15); /* bg-white/15 */
-  color: white;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  
+  /* Default Inactive (Light Mode - Dark Header) */
+  background-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(4px);
+  border-bottom: 1px solid transparent; /* Reset old style */
 }
 
-.nav-btn.inactive:hover {
+.search-engine-option:hover {
   background-color: rgba(255, 255, 255, 0.25);
+  color: white;
+  opacity: 1;
 }
 
-/* 自定义壁纸下的默认状态 */
-.custom-wallpaper .nav-btn.inactive {
+.search-engine-option.active {
+  background-color: white;
+  color: #1d4ed8; /* Dark Blue */
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
+  font-weight: 600;
+  border-bottom-color: transparent; /* Reset old style */
+}
+
+/* Custom Wallpaper Mode */
+.custom-wallpaper .search-engine-option {
   background-color: rgba(255, 255, 255, 0.7);
-  color: #374151; /* text-gray-700 */
+  color: #374151;
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
-
-.custom-wallpaper .nav-btn.inactive:hover {
+.custom-wallpaper .search-engine-option:hover {
   background-color: white;
-  color: #2563eb; /* text-primary-600 */
+  color: #2563eb;
 }
-
-/* 激活状态 (Active) */
-.nav-btn.active {
-  background-color: white;
-  color: #1d4ed8; /* text-primary-700 */
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-  font-weight: 600;
-}
-
-/* 自定义壁纸下的激活状态 */
-.custom-wallpaper .nav-btn.active {
-  background-color: #2563eb; /* bg-primary-600 */
+.custom-wallpaper .search-engine-option.active {
+  background-color: #2563eb;
   color: white;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
 }
 
-/* 下拉菜单容器 */
+/* Dark Mode */
+.dark .search-engine-option {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #9ca3af;
+  border: 1px solid transparent;
+}
+.dark .search-engine-option:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #e5e7eb;
+}
+.dark .search-engine-option.active {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+/* 侧边栏与 Overlay */
+@media (max-width: 1023px) {
+  .mobile-sidebar { transform: translateX(-100%); transition: transform 0.3s ease; }
+  .mobile-sidebar.open { transform: translateX(0); }
+  .mobile-overlay { opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+  .mobile-overlay.open { opacity: 1; pointer-events: auto; }
+}
+
+.line-clamp-2 {
+  display: -webkit-box !important; -webkit-line-clamp: 2 !important; -webkit-box-orient: vertical !important;
+  overflow: hidden !important; text-overflow: ellipsis !important; word-break: break-word;
+}
+
+#sidebar-toggle { display: none; }
+@media (min-width: 1024px) {
+  #sidebar-toggle:checked ~ .sidebar { margin-left: -16rem; }
+  #sidebar-toggle:checked ~ .main-content { margin-left: 0; }
+}
+
+/* 毛玻璃效果 - Light Mode */
+.frosted-glass-effect {
+  background: rgba(255, 255, 255, 0.4) !important;
+  backdrop-filter: blur(var(--frosted-glass-blur, 15px)) !important;
+  -webkit-backdrop-filter: blur(var(--frosted-glass-blur, 15px)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05) !important;
+}
+
+.frosted-glass-effect:hover {
+  background: rgba(255, 255, 255, 0.6) !important;
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Light Mode + Wallpaper Sidebar Optimization */
+html:not(.dark) body.custom-wallpaper .sidebar {
+    background-color: rgba(255, 255, 255, 0.4) !important;
+    backdrop-filter: blur(var(--frosted-glass-blur, 15px));
+    -webkit-backdrop-filter: blur(var(--frosted-glass-blur, 15px));
+    border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
 .dropdown-menu {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%) translateY(4px); /* 减小位移 */
-  z-index: 60;
-  
-  /* 宽度设置：约5-6个汉字 */
-  min-width: 100px; 
-  width: max-content;
-  max-width: 160px;
-  
-  padding: 0.25rem; 
-  margin-top: 0.2rem; /* 减小间距 */
-  
-  background-color: white;
-  border-radius: 0.5rem;
+  position: absolute; top: 100%; left: 50%; transform: translateX(-50%) translateY(4px);
+  z-index: 60; min-width: 100px; width: max-content; max-width: 160px;
+  padding: 0.25rem; margin-top: 0.2rem;
+  background-color: white; border-radius: 0.5rem;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   border: 1px solid #e5e7eb;
-  
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
+  opacity: 0; visibility: hidden; pointer-events: none;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  display: flex; flex-direction: column; align-items: stretch;
 }
 
-/* === 关键修复：透明桥接层 === */
+/* 增加透明伪元素填补间隙，防止鼠标移出导致菜单消失 */
 .dropdown-menu::before {
   content: '';
   position: absolute;
-  top: -0.4rem; /* 覆盖 margin 和 translateY 的空间 */
+  top: -1rem;
   left: 0;
   width: 100%;
-  height: 0.4rem;
+  height: 1rem;
   background: transparent;
 }
 
-/* 显示下拉菜单 */
-.menu-item-wrapper:hover > .dropdown-menu,
-.dropdown-menu.show {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: translateX(-50%) translateY(0);
+.menu-item-wrapper:hover > .dropdown-menu, .dropdown-menu.show {
+  opacity: 1; visibility: visible; pointer-events: auto; transform: translateX(-50%) translateY(0);
 }
 
-/* 二级菜单 (向右弹出) */
-.dropdown-menu .menu-item-wrapper {
-  display: block;
-  width: 100%;
-}
-
+.dropdown-menu .menu-item-wrapper { display: block; width: 100%; }
 .dropdown-menu .menu-item-wrapper .dropdown-menu {
-  top: 0;
-  left: 100%;
-  margin-top: -0.25rem;
-  margin-left: 0.2rem; /* 减小间距 */
-  transform: translateX(-4px) translateY(0); /* 减小位移 */
+  top: 0; left: 100%; margin-top: -0.25rem; margin-left: 0.2rem; transform: translateX(-4px) translateY(0);
 }
-
-/* 二级菜单桥接 */
 .dropdown-menu .menu-item-wrapper .dropdown-menu::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -0.4rem; /* 覆盖间隙 */
-  width: 0.4rem;
-  height: 100%;
-  background: transparent;
+  content: ''; position: absolute; top: 0; left: -0.4rem; width: 0.4rem; height: 100%; background: transparent;
 }
+.dropdown-menu .menu-item-wrapper:hover > .dropdown-menu { transform: translateX(0) translateY(0); }
 
-.dropdown-menu .menu-item-wrapper:hover > .dropdown-menu {
-  transform: translateX(0) translateY(0);
-}
-
-/* 下拉菜单项 */
-.dropdown-item {
-  display: flex;
-  align-items: center;
-  justify-content: center; /* 文字居中 */
-  position: relative; /* For arrow positioning */
-  
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem; /* text-sm */
-  color: #4b5563; /* text-gray-600 */
-  text-decoration: none;
-  border-radius: 0.25rem;
-  transition: all 0.15s ease;
-  width: 100%;
-  text-align: center; /* 确保文字居中 */
-}
-
-.dropdown-item:hover {
-  background-color: #f3f4f6; /* bg-gray-100 */
-  color: #2563eb; /* text-primary-600 */
-}
-
-/* 下拉菜单中的激活项 */
-.dropdown-item.active {
-  background-color: #eff6ff; /* bg-primary-50 */
-  color: #1d4ed8; /* text-primary-700 */
-  font-weight: 500;
-}
-
-/* 箭头指示器 (小箭头) */
-.dropdown-arrow-icon {
-  position: absolute;
-  right: 4px; /* 靠右浮动 */
-  top: 50%;
-  transform: translateY(-50%);
-  width: 12px;
-  height: 12px;
-  color: #9ca3af;
-  pointer-events: none;
-}
-
-.menu-item-wrapper:hover > .dropdown-item .dropdown-arrow-icon {
-  color: #6b7280;
-}
-
-/* 更多按钮容器背景修正 */
-#horizontalMoreBtnContainer {
-  /* 确保渐变背景不遮挡圆角 */
-  border-radius: 0 9999px 9999px 0; 
-}
-
-/* === 关键修复：更多菜单样式重置与显隐控制 === */
-#horizontalMoreDropdown {
-  left: auto !important;
-  right: 0 !important;
-  transform: translateY(10px) !important;
-}
-
-/* 当移除 hidden 类时，强制显示 */
+/* Fix for horizontal more dropdown toggling */
 #horizontalMoreDropdown:not(.hidden) {
   opacity: 1 !important;
   visibility: visible !important;
@@ -485,122 +397,97 @@
   transform: translateY(0) scale(1) !important;
 }
 
-/* 自定义壁纸下的下拉菜单样式 */
-.custom-wallpaper .dropdown-menu {
-  background-color: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(8px);
+/* Horizontal More Dropdown Items Style */
+#horizontalMoreDropdown .dropdown-item {
+  display: flex; width: 100%; height: auto; border-radius: 0.25rem;
+  background-color: transparent; color: #4b5563; box-shadow: none;
+  justify-content: flex-start; padding: 0.5rem 0.75rem; backdrop-filter: none;
 }
+#horizontalMoreDropdown .dropdown-item:hover { background-color: #f3f4f6; color: #2563eb; }
+#horizontalMoreDropdown .dropdown-item.active { background-color: #eff6ff; color: #1d4ed8; font-weight: 600; }
 
-/* ========================================= */
-/* Overflow Menu Adaptation */
-/* ========================================= */
+.custom-wallpaper #horizontalMoreDropdown .dropdown-item { color: #374151; }
+.custom-wallpaper #horizontalMoreDropdown .dropdown-item:hover { background-color: rgba(255, 255, 255, 0.8); color: #2563eb; }
+.custom-wallpaper #horizontalMoreDropdown .dropdown-item.active { background-color: #2563eb; color: white !important; }
 
-/* Transform nav-btn into dropdown-item style when moved to overflow menu */
-#horizontalMoreDropdown .nav-btn {
-  display: flex;
-  width: 100%;
-  height: auto; /* Reset fixed height */
-  border-radius: 0.25rem;
-  background-color: transparent;
-  color: #4b5563;
-  box-shadow: none;
-  justify-content: flex-start; /* Left align */
-  padding: 0.5rem 0.75rem;
-  backdrop-filter: none;
-}
+.dark #horizontalMoreDropdown .dropdown-item { color: #d1d5db; }
+.dark #horizontalMoreDropdown .dropdown-item:hover { background-color: rgba(255, 255, 255, 0.1); color: #fff; }
+.dark #horizontalMoreDropdown .dropdown-item.active { background-color: rgba(59, 130, 246, 0.2); color: #60a5fa; }
 
-#horizontalMoreDropdown .nav-btn:hover {
-  background-color: #f3f4f6;
-  color: #2563eb;
-}
-
-#horizontalMoreDropdown .nav-btn.active {
-  background-color: #eff6ff;
-  color: #1d4ed8;
-  font-weight: 600;
-}
-
-/* Custom wallpaper adjustments for overflow menu */
-.custom-wallpaper #horizontalMoreDropdown .nav-btn {
-  color: #374151;
-}
-.custom-wallpaper #horizontalMoreDropdown .nav-btn:hover {
-  background-color: rgba(255, 255, 255, 0.8);
-  color: #2563eb;
-}
-.custom-wallpaper #horizontalMoreDropdown .nav-btn.active {
-  background-color: #2563eb;
-  color: white;
-}
-
-/* ========================================= */
-/* 修复：更多菜单中的二级菜单改为向左弹出 */
-/* ========================================= */
-
-#horizontalMoreDropdown .menu-item-wrapper .dropdown-menu {
+/* 针对右侧"更多"菜单的特殊处理：子菜单向左弹出，防止溢出屏幕 */
+#horizontalMoreDropdown .dropdown-menu {
   left: auto;
-  right: 100%; /* 向左弹出 */
+  right: 100%;
   margin-left: 0;
   margin-right: 0.2rem;
-  transform: translateX(4px) translateY(0); /* 调整动画位移方向 */
+  transform: translateX(4px) translateY(0);
 }
 
-/* 修正左侧弹出时的鼠标悬停桥接区域 */
-#horizontalMoreDropdown .menu-item-wrapper .dropdown-menu::after {
+#horizontalMoreDropdown .dropdown-menu::after {
   left: auto;
   right: -0.4rem;
 }
 
-/* 调整悬停时的动画终点 */
 #horizontalMoreDropdown .menu-item-wrapper:hover > .dropdown-menu {
   transform: translateX(0) translateY(0);
 }
 
+/* Force Card Hover Scale */
+.site-card:hover {
+  transform: scale(1.15) translateY(-10px) !important;
+}
+
 /* ========================================= */
-/* 搜索引擎选项样式 */
+/*  General Dropdown Item Styles             */
 /* ========================================= */
-.search-engine-option {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.25rem 0.75rem;
-    border-radius: 9999px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    opacity: 0.7;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.9); /* 默认白色 */
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #374151;
+  border-radius: 0.375rem;
+  transition: all 0.2s;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.search-engine-option:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-    opacity: 1;
+.dropdown-item:hover {
+  background-color: #f3f4f6;
+  color: #2563eb;
 }
 
-.search-engine-option.active {
-    opacity: 1;
-    font-weight: 700;
-    background-color: rgba(255, 255, 255, 0.2);
+.dropdown-item.active {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 500;
 }
 
-/* 自定义壁纸模式下的颜色 */
-.custom-wallpaper .search-engine-option {
-    color: #1f2937; /* gray-800 */
-    background-color: rgba(255, 255, 255, 0.6);
-    backdrop-filter: blur(4px);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    opacity: 0.9;
+.dropdown-arrow-icon {
+  width: 1rem;
+  height: 1rem;
+  margin-left: auto;
+  padding-left: 0.5rem;
+  opacity: 0.5;
+  transition: opacity 0.2s;
 }
 
-.custom-wallpaper .search-engine-option:hover {
-    background-color: rgba(255, 255, 255, 0.8);
-    opacity: 1;
+.dropdown-item:hover .dropdown-arrow-icon {
+  opacity: 1;
 }
 
-.custom-wallpaper .search-engine-option.active {
-    color: #2563eb; /* primary-600 */
-    background-color: rgba(255, 255, 255, 0.95);
-    font-weight: 600;
-    opacity: 1;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+/* Force Dropdown Item Color in Light Mode */
+html:not(.dark) .dropdown-item {
+    color: #4b5563;
+}
+html:not(.dark) .dropdown-item:hover {
+    color: #2563eb !important;
+}
+html:not(.dark) .dropdown-item.active {
+    color: #1d4ed8 !important;
 }

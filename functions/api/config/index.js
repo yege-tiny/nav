@@ -67,8 +67,8 @@ export async function onRequestGet(context) {
     }
 
     if (keyword) {
-      queryBase += ` AND (name LIKE ? OR url LIKE ? OR catelog_name LIKE ?)`;
-      queryBindParams.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+      queryBase += ` AND (name LIKE ? OR url LIKE ? OR catelog_name LIKE ? OR s.desc LIKE ?)`;
+      queryBindParams.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
     }
 
     const query = `SELECT * ${queryBase} ORDER BY sort_order ASC, create_time DESC LIMIT ? OFFSET ?`;

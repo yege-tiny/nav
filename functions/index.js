@@ -181,6 +181,7 @@ export async function onRequest(context) {
   let homeSiteDescription = '';
   let homeSearchEngineEnabled = false;
   let homeDefaultCategory = '';
+  let homeRememberLastCategory = false;
   let layoutGridCols = '4';
   let layoutCustomWallpaper = '';
   let layoutMenuLayout = 'horizontal';
@@ -212,7 +213,7 @@ export async function onRequest(context) {
         'home_hide_github', 'home_hide_admin',
         'home_custom_font_url', 'home_title_font', 'home_subtitle_font', 'home_stats_font', 'home_hitokoto_font',
         'home_site_name', 'home_site_description',
-        'home_search_engine_enabled', 'home_default_category',
+        'home_search_engine_enabled', 'home_default_category', 'home_remember_last_category',
         'layout_grid_cols', 'layout_custom_wallpaper', 'layout_menu_layout',
         'layout_random_wallpaper', 'bing_country',
         'layout_enable_frosted_glass', 'layout_frosted_glass_intensity',
@@ -261,6 +262,7 @@ export async function onRequest(context) {
 
         if (row.key === 'home_search_engine_enabled') homeSearchEngineEnabled = row.value === 'true';
         if (row.key === 'home_default_category') homeDefaultCategory = row.value;
+        if (row.key === 'home_remember_last_category') homeRememberLastCategory = row.value === 'true';
 
         if (row.key === 'layout_grid_cols') layoutGridCols = row.value;
         if (row.key === 'layout_custom_wallpaper') layoutCustomWallpaper = row.value;
@@ -292,10 +294,25 @@ export async function onRequest(context) {
   const explicitAll = requestedCatalogName.toLowerCase() === 'all';
   
   if (!requestedCatalogName && !explicitAll) {
-      // 优先级：数据库设置 (不再使用环境变量 DISPLAY_CATEGORY)
-      const defaultCat = (homeDefaultCategory || '').trim();
-      if (defaultCat && categoryIdMap.has(defaultCat)) {
-          requestedCatalogName = defaultCat;
+      // 优先级：Cookie (如果开启记忆) > 数据库默认设置
+      let cookieCatId = null;
+      if (homeRememberLastCategory) {
+          const cookies = request.headers.get('Cookie') || '';
+          const match = cookies.match(/iori_last_category=(\d+)/);
+          if (match) {
+              cookieCatId = parseInt(match[1]);
+          }
+      }
+
+      if (cookieCatId && categoryMap.has(cookieCatId)) {
+          // 通过 ID 反查 Name (因为后续逻辑基于 Name)
+          requestedCatalogName = categoryMap.get(cookieCatId).catelog;
+      } else {
+          // Fallback to Default Category
+          const defaultCat = (homeDefaultCategory || '').trim();
+          if (defaultCat && categoryIdMap.has(defaultCat)) {
+              requestedCatalogName = defaultCat;
+          }
       }
   }
 
@@ -312,43 +329,26 @@ export async function onRequest(context) {
   }
 
     // 3. 查询站点
-
     let sites = [];
+    let allSites = [];
 
     try {
-
         let query = `SELECT id, name, url, logo, desc, catelog_id, catelog_name, sort_order, is_private, create_time, update_time FROM sites
-
                      WHERE (is_private = 0 OR ? = 1)`;
-
         const params = [includePrivate];
 
-  
+        query += ` ORDER BY sort_order ASC, create_time DESC`;
+        
+        const { results } = await env.NAV_DB.prepare(query).bind(...params).all();
+        allSites = results || [];
 
         if (targetCategoryIds.length > 0) {
-
-            const markers = targetCategoryIds.map(() => '?').join(',');
-
-            query += ` AND catelog_id IN (${markers})`;
-
-            params.push(...targetCategoryIds);
-
+            sites = allSites.filter(site => targetCategoryIds.includes(site.catelog_id));
+        } else {
+            sites = allSites;
         }
-
-  
-
-        query += ` ORDER BY sort_order ASC, create_time DESC`;
-
-        
-
-        const { results } = await env.NAV_DB.prepare(query).bind(...params).all();
-
-        sites = results || [];
-
     } catch (e) {
-
         return new Response(`Failed to fetch sites: ${e.message}`, { status: 500 });
-
     }
 
   
@@ -467,37 +467,71 @@ export async function onRequest(context) {
 
     
 
-    // Header Base Classes
-
-    let headerClass = isCustomWallpaper 
-
-        ? 'bg-transparent border-none shadow-none transition-colors duration-300' 
-
-        : 'bg-primary-700 text-white border-b border-primary-600 shadow-sm';
-
-  
-
-    let containerClass = isCustomWallpaper
-
-        ? 'rounded-2xl'
-
-        : 'rounded-2xl border border-primary-100/60 bg-white/80 backdrop-blur-sm shadow-sm';
-
-  
-
-    const titleColorClass = isCustomWallpaper ? 'text-gray-900' : 'text-white';
-
-    const subTextColorClass = isCustomWallpaper ? 'text-gray-600' : 'text-primary-100/90';
+        // Header Base Classes
 
     
 
-    const searchInputClass = isCustomWallpaper
+    
 
-        ? 'bg-white/90 backdrop-blur border border-gray-200 text-gray-800 placeholder-gray-400 focus:ring-primary-200 focus:border-primary-400 focus:bg-white'
+    
 
-        : 'bg-white/15 text-white placeholder-primary-200 focus:ring-white/30 focus:bg-white/20 border-none';
+        let headerClass = isCustomWallpaper 
 
-    const searchIconClass = isCustomWallpaper ? 'text-gray-400' : 'text-primary-200';
+    
+
+            ? 'bg-transparent border-none shadow-none transition-colors duration-300' 
+
+    
+
+            : 'bg-primary-700 text-white border-b border-primary-600 shadow-sm dark:bg-gray-900 dark:border-gray-800';
+
+    
+
+      
+
+    
+
+        let containerClass = isCustomWallpaper
+
+    
+
+            ? 'rounded-2xl'
+
+    
+
+            : 'rounded-2xl border border-primary-100/60 bg-white/80 backdrop-blur-sm shadow-sm dark:bg-gray-800/80 dark:border-gray-700';
+
+    
+
+      
+
+    
+
+        const titleColorClass = isCustomWallpaper ? 'text-gray-900 dark:text-gray-100' : 'text-white';
+
+    
+
+        const subTextColorClass = isCustomWallpaper ? 'text-gray-600 dark:text-gray-300' : 'text-primary-100/90 dark:text-gray-400';
+
+    
+
+        
+
+    
+
+        const searchInputClass = isCustomWallpaper
+
+    
+
+            ? 'bg-white/90 backdrop-blur border border-gray-200 text-gray-800 placeholder-gray-400 focus:ring-primary-200 focus:border-primary-400 focus:bg-white dark:bg-gray-800/90 dark:border-gray-600 dark:text-gray-200 dark:focus:bg-gray-800'
+
+    
+
+            : 'bg-white/15 text-white placeholder-primary-200 focus:ring-white/30 focus:bg-white/20 border-none dark:bg-gray-800/50 dark:text-gray-200 dark:placeholder-gray-500';
+
+    
+
+        const searchIconClass = isCustomWallpaper ? 'text-gray-400 dark:text-gray-500' : 'text-primary-200 dark:text-gray-500';
 
   
 
@@ -637,15 +671,23 @@ export async function onRequest(context) {
 
             
 
-            const baseClass = "flex items-center px-3 py-2 rounded-lg w-full transition-colors duration-200";
+                        const baseClass = "flex items-center px-3 py-2 rounded-lg w-full transition-colors duration-200";
 
-            const activeClass = isActive ? "bg-secondary-100 text-primary-700" : "hover:bg-gray-100 text-gray-700";
+            
 
-            // Use darker icon color for custom wallpaper mode to ensure visibility
+                        const activeClass = isActive ? "bg-secondary-100 text-primary-700 dark:bg-gray-800 dark:text-primary-400" : "hover:bg-gray-100 text-gray-700 dark:text-gray-300 dark:hover:bg-gray-800";
 
-            const defaultIconColor = isCustomWallpaper ? "text-gray-600" : "text-gray-400";
+            
 
-            const iconClass = isActive ? "text-primary-600" : defaultIconColor;
+                        // Use darker icon color for custom wallpaper mode to ensure visibility
+
+            
+
+                        const defaultIconColor = isCustomWallpaper ? "text-gray-600" : "text-gray-400 dark:text-gray-500";
+
+            
+
+                        const iconClass = isActive ? "text-primary-600 dark:text-primary-400" : defaultIconColor;
 
             const indent = level * 12; 
 
@@ -687,9 +729,9 @@ export async function onRequest(context) {
 
     // Sites Grid
 
-    const sitesGridMarkup = sites.map((site) => {
+        const sitesGridMarkup = sites.map((site, index) => {
 
-                  const rawName = site.name || '未命名';
+                      const rawName = site.name || '未命名';
 
                   const rawCatalog = site.catelog_name || '未分类';
 
@@ -713,97 +755,251 @@ export async function onRequest(context) {
 
   
 
-      const descHtml = layoutHideDesc ? '' : `<p class="mt-2 text-sm text-gray-600 leading-relaxed line-clamp-2" title="${safeDesc}">${safeDesc}</p>`;
-
-      const linksHtml = layoutHideLinks ? '' : `
-
-            <div class="mt-3 flex items-center justify-between">
-
-              <span class="text-xs text-primary-600 truncate max-w-[140px]" title="${safeDisplayUrl}">${escapeHTML(safeDisplayUrl)}</span>
-
-              <button class="copy-btn relative flex items-center px-2 py-1 ${hasValidUrl ? 'bg-accent-100 text-accent-700 hover:bg-accent-200' : 'bg-gray-200 text-gray-400 cursor-not-allowed'} rounded-full text-xs font-medium transition-colors" data-url="${escapeHTML(normalizedUrl)}" ${hasValidUrl ? '' : 'disabled'}>
-
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ${layoutGridCols >= '5' ? '' : 'mr-1'}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-
-                </svg>
-
-                ${layoutGridCols >= '5' ? '' : '<span class="copy-text">复制</span>'}
-
-                <span class="copy-success hidden absolute -top-8 right-0 bg-accent-500 text-white text-xs px-2 py-1 rounded shadow-md">已复制!</span>
-
-              </button>
-
-            </div>`;
-
-      const categoryHtml = layoutHideCategory ? '' : `
-
-                  <span class="inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-xs font-medium bg-secondary-100 text-primary-700">
-
-                    ${safeCatalog}
-
-                  </span>`;
-
-      
-
-      const frostedClass = layoutEnableFrostedGlass ? 'frosted-glass-effect' : '';
-
-      const cardStyleClass = layoutCardStyle === 'style2' ? 'style-2' : '';
-
-      const baseCardClass = layoutEnableFrostedGlass 
-
-          ? 'site-card group overflow-hidden transition-all' 
-
-          : 'site-card group bg-white border border-primary-100/60 shadow-sm overflow-hidden';
+                                    const descHtml = layoutHideDesc ? '' : `<p class="mt-2 text-sm text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-2" title="${safeDesc}">${safeDesc}</p>`;
 
   
 
-      return `
+                          
 
-        <div class="${baseCardClass} ${frostedClass} ${cardStyleClass}" data-id="${site.id}" data-name="${escapeHTML(site.name)}" data-url="${escapeHTML(normalizedUrl)}" data-catalog="${escapeHTML(site.catelog_name || site.catelog || '未分类')}" data-desc="${safeDesc}">
+  
 
-          <div class="site-card-content">
+                                    const linksHtml = layoutHideLinks ? '' : `
 
-            <a href="${escapeHTML(normalizedUrl || '#')}" ${hasValidUrl ? 'target="_blank" rel="noopener noreferrer"' : ''} class="block">
+  
 
-              <div class="flex items-start">
+                          
 
-                <div class="site-icon flex-shrink-0 mr-4 transition-all duration-300">
+  
 
-                  ${
+                                          <div class="mt-3 flex items-center justify-between">
 
-                    logoUrl
+  
 
-                      ? `<img src="${escapeHTML(logoUrl)}" alt="${safeName}" class="w-10 h-10 rounded-lg object-cover bg-gray-100">`
+                    <span class="text-xs text-primary-600 dark:text-primary-400 truncate max-w-[140px]" title="${safeDisplayUrl}">${escapeHTML(safeDisplayUrl)}</span>
 
-                      : `<div class="w-10 h-10 rounded-lg bg-primary-600 flex items-center justify-center text-white font-semibold text-lg shadow-inner">${cardInitial}</div>`
+  
 
-                  }
+                    <button class="copy-btn relative flex items-center px-2 py-1 ${hasValidUrl ? 'bg-accent-100 text-accent-700 hover:bg-accent-200 dark:bg-accent-900/30 dark:text-accent-300 dark:hover:bg-accent-900/50' : 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'} rounded-full text-xs font-medium transition-colors" data-url="${escapeHTML(normalizedUrl)}" ${hasValidUrl ? '' : 'disabled'}>
+
+  
+
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ${layoutGridCols >= '5' ? '' : 'mr-1'}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+
+  
+
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+
+  
+
+                      </svg>
+
+  
+
+                      ${layoutGridCols >= '5' ? '' : '<span class="copy-text">复制</span>'}
+
+  
+
+                      <span class="copy-success hidden absolute -top-8 right-0 bg-accent-500 text-white text-xs px-2 py-1 rounded shadow-md">已复制!</span>
+
+  
+
+                    </button>
+
+  
+
+                  </div>`;
+
+  
+
+            const categoryHtml = layoutHideCategory ? '' : `
+
+  
+
+                        <span class="inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-xs font-medium bg-secondary-100 text-primary-700 dark:bg-secondary-800 dark:text-primary-300">
+
+  
+
+                          ${safeCatalog}
+
+  
+
+                        </span>`;
+
+  
+
+            
+
+  
+
+            const frostedClass = layoutEnableFrostedGlass ? 'frosted-glass-effect' : '';
+
+  
+
+            const cardStyleClass = layoutCardStyle === 'style2' ? 'style-2' : '';
+
+  
+
+                              const baseCardClass = layoutEnableFrostedGlass 
+
+  
+
+                    
+
+  
+
+                                        ? 'site-card group h-full flex flex-col overflow-hidden transition-all' 
+
+  
+
+                    
+
+  
+
+                                        : 'site-card group h-full flex flex-col bg-white border border-primary-100/60 shadow-sm overflow-hidden dark:bg-gray-800 dark:border-gray-700';
+
+  
+
+                    
+
+  
+
+                              
+
+  
+
+                              // Calculate delay for server-side rendering animation
+
+  
+
+                              // Note: 'sites' is an array, we need the index. map callback provides (site, index).
+
+  
+
+                              // But the current map usage is sites.map((site) => ...), we need to add index argument.
+
+  
+
+                              // Wait, I need to check the full map function signature in the old_string context or just update it.
+
+  
+
+                              // The surrounding code shows `const sitesGridMarkup = sites.map((site) => {`.
+
+  
+
+                              // I will update the map arguments.
+
+  
+
+                  
+
+  
+
+                              const delay = Math.min(index, 20) * 30;
+
+  
+
+                              const animStyle = delay > 0 ? `style="animation-delay: ${delay}ms"` : '';
+
+  
+
+                    
+
+  
+
+                              return `
+
+  
+
+                    
+
+  
+
+                                <div class="${baseCardClass} ${frostedClass} ${cardStyleClass} card-anim-enter" ${animStyle} data-id="${site.id}" data-name="${escapeHTML(site.name)}" data-url="${escapeHTML(normalizedUrl)}" data-catalog="${escapeHTML(site.catelog_name || site.catelog || '未分类')}" data-desc="${safeDesc}">
+
+  
+
+                <div class="site-card-content">
+
+  
+
+                  <a href="${escapeHTML(normalizedUrl || '#')}" ${hasValidUrl ? 'target="_blank" rel="noopener noreferrer"' : ''} class="block">
+
+  
+
+                    <div class="flex items-start">
+
+  
+
+                      <div class="site-icon flex-shrink-0 mr-4 transition-all duration-300">
+
+  
+
+                        ${
+
+  
+
+                          logoUrl
+
+  
+
+                            ? `<img src="${escapeHTML(logoUrl)}" alt="${safeName}" class="w-10 h-10 rounded-lg object-cover bg-gray-100 dark:bg-gray-700">`
+
+  
+
+                            : `<div class="w-10 h-10 rounded-lg bg-primary-600 flex items-center justify-center text-white font-semibold text-lg shadow-inner">${cardInitial}</div>`
+
+  
+
+                        }
+
+  
+
+                      </div>
+
+  
+
+                      <div class="flex-1 min-w-0">
+
+  
+
+                        <h3 class="site-title text-base font-medium text-gray-900 dark:text-gray-100 truncate transition-all duration-300 origin-left" title="${safeName}">${safeName}</h3>
+
+  
+
+                        ${categoryHtml}
+
+  
+
+                      </div>
+
+  
+
+                    </div>
+
+  
+
+                    ${descHtml}
+
+  
+
+                  </a>
+
+  
+
+                  ${linksHtml}
+
+  
 
                 </div>
 
-                <div class="flex-1 min-w-0">
-
-                  <h3 class="site-title text-base font-medium text-gray-900 truncate transition-all duration-300 origin-left" title="${safeName}">${safeName}</h3>
-
-                  ${categoryHtml}
-
-                </div>
+  
 
               </div>
 
-              ${descHtml}
+  
 
-            </a>
-
-            ${linksHtml}
-
-          </div>
-
-        </div>
-
-      `;
+            `;
 
     }).join('');
 
@@ -861,7 +1057,7 @@ export async function onRequest(context) {
 
   // 搜索引擎选项 HTML
   const searchEngineOptions = homeSearchEngineEnabled ? `
-    <div class="flex justify-center items-center space-x-5 mb-4 text-sm select-none" id="searchEngineWrapper">
+    <div class="flex justify-center items-center gap-3 mb-4 text-sm select-none search-engine-wrapper">
         <label class="search-engine-option active" data-engine="local">
             <span>站内</span>
         </label>
@@ -875,6 +1071,29 @@ export async function onRequest(context) {
             <span>Bing</span>
         </label>
     </div>
+    <script>
+    (function(){
+      try {
+        var saved = localStorage.getItem('search_engine');
+        if(saved && saved !== 'local'){
+          var wrappers = document.querySelectorAll('.search-engine-wrapper');
+          wrappers.forEach(function(w){
+             var opts = w.querySelectorAll('.search-engine-option');
+             opts.forEach(function(opt){
+               if(opt.dataset.engine === saved) opt.classList.add('active');
+               else opt.classList.remove('active');
+             });
+          });
+          var inputs = document.querySelectorAll('.search-input-target');
+          var ph = '搜索书签...';
+          if(saved === 'google') ph = 'Google 搜索...';
+          if(saved === 'baidu') ph = '百度搜索...';
+          if(saved === 'bing') ph = 'Bing 搜索...';
+          inputs.forEach(function(i){ i.placeholder = ph; });
+        }
+      } catch(e){}
+    })();
+    </script>
   ` : '';
 
   const verticalHeaderContent = `
@@ -936,6 +1155,15 @@ export async function onRequest(context) {
   let mobileToggleVisibilityClass = 'lg:hidden';
   let githubIconHtml = '';
   let adminIconHtml = '';
+  let themeIconHtml = `
+    <button id="themeToggleBtn" class="flex items-center justify-center p-2 rounded-lg bg-white/80 backdrop-blur shadow-md hover:bg-white text-gray-700 hover:text-amber-500 dark:bg-gray-800/80 dark:text-gray-200 dark:hover:text-yellow-300 transition-all cursor-pointer" title="切换主题">
+      <!-- Sun Icon (Light Mode) -->
+      <svg id="themeIconSun" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="block dark:hidden"><circle cx="12" cy="12" r="5"></circle><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path></svg>
+      <!-- Moon Icon (Dark Mode) -->
+      <svg id="themeIconMoon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden dark:block"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    </button>
+  `;
+  
   let headerContent = verticalHeaderContent;
 
   if (layoutMenuLayout === 'horizontal') {
@@ -946,7 +1174,7 @@ export async function onRequest(context) {
       
       if (!homeHideGithub) {
           githubIconHtml = `
-          <a href="https://slink.661388.xyz/iori-nav" target="_blank" class="fixed top-4 left-4 z-50 hidden min-[550px]:flex items-center justify-center p-2 rounded-lg bg-white/80 backdrop-blur shadow-md hover:bg-white text-gray-700 hover:text-black transition-all" title="GitHub">
+          <a href="https://slink.661388.xyz/iori-nav" target="_blank" class="fixed top-4 left-4 z-50 hidden min-[550px]:flex items-center justify-center p-2 rounded-lg bg-white/80 backdrop-blur shadow-md hover:bg-white text-gray-700 hover:text-black dark:bg-gray-800/80 dark:text-gray-200 dark:hover:text-white transition-all" title="GitHub">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
           </a>
           `;
@@ -954,7 +1182,7 @@ export async function onRequest(context) {
       
       if (!homeHideAdmin) {
           adminIconHtml = `
-          <a href="/admin" target="_blank" class="fixed top-4 right-4 z-50 hidden min-[550px]:flex items-center justify-center p-2 rounded-lg bg-white/80 backdrop-blur shadow-md hover:bg-white text-gray-700 hover:text-primary-600 transition-all" title="后台管理">
+          <a href="/admin" target="_blank" class="flex items-center justify-center p-2 rounded-lg bg-white/80 backdrop-blur shadow-md hover:bg-white text-gray-700 hover:text-primary-600 dark:bg-gray-800/80 dark:text-gray-200 dark:hover:text-primary-400 transition-all" title="后台管理">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M7 18a5 5 0 0 1 10 0"/></path></svg>
           </a>
           `;
@@ -965,11 +1193,18 @@ export async function onRequest(context) {
             ${verticalHeaderContent}
         </div>
         <div class="hidden min-[550px]:block">
-            ${adminIconHtml}
             ${horizontalHeaderContent}
         </div>
       `;
   }
+  
+  // Combine for Top Right
+  const topRightActionsHtml = `
+    <div class="fixed top-4 right-4 z-50 flex items-center gap-3">
+        ${themeIconHtml}
+        ${adminIconHtml}
+    </div>
+  `;
   
   // Also handle Sidebar GitHub/Admin icons visibility in Vertical Mode
   // If we are in vertical mode, `githubIconHtml` is empty.
@@ -992,8 +1227,8 @@ export async function onRequest(context) {
   
   const leftTopActionHtml = `
   <div class="fixed top-4 left-4 z-50 ${mobileToggleVisibilityClass}">
-    <button id="sidebarToggle" class="p-2 rounded-lg bg-white shadow-md hover:bg-gray-100">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <button id="sidebarToggle" class="p-2 rounded-lg bg-white dark:bg-gray-800 shadow-md hover:bg-gray-100 dark:hover:bg-gray-700">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-primary-500 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
       </svg>
     </button>
@@ -1002,10 +1237,10 @@ export async function onRequest(context) {
   `;
 
   const footerClass = isCustomWallpaper
-      ? 'bg-transparent py-8 px-6 mt-12 border-none shadow-none text-black'
-      : 'bg-white py-8 px-6 mt-12 border-t border-primary-100';
+      ? 'bg-transparent py-8 px-6 mt-12 border-none shadow-none text-black dark:text-gray-200'
+      : 'bg-white py-8 px-6 mt-12 border-t border-primary-100 dark:bg-gray-900 dark:border-gray-800 dark:text-gray-400';
       
-  const hitokotoClass = (isCustomWallpaper ? 'text-black' : 'text-gray-500') + ' ml-auto';
+  const hitokotoClass = (isCustomWallpaper ? 'text-black dark:text-gray-200' : 'text-gray-500 dark:text-gray-400') + ' ml-auto';
 
   const templateResponse = await env.ASSETS.fetch(new URL('/index.html', request.url));
   let html = await templateResponse.text();
@@ -1062,10 +1297,14 @@ export async function onRequest(context) {
   html = html.replace('</head>', `${globalScrollCss}</head>`);
   
   // 替换 body 标签
-  html = html.replace('<body class="bg-secondary-50 font-sans text-gray-800">', `<body class="bg-secondary-50 font-sans text-gray-800 relative ${isCustomWallpaper ? 'custom-wallpaper' : ''}">${bgLayerHtml}`);
+  html = html.replace('<body class="bg-secondary-50 font-sans text-gray-800">', `<body class="bg-secondary-50 dark:bg-gray-900 font-sans text-gray-800 dark:text-gray-100 relative ${isCustomWallpaper ? 'custom-wallpaper' : ''}">${bgLayerHtml}`);
   
   // Inject Card CSS Variables
-  const cardCssVars = `<style>:root { --card-padding: 1.25rem; --card-radius: ${layoutCardBorderRadius}px; --frosted-glass-blur: ${layoutFrostedGlassIntensity}px; }</style>`;
+  const cardRadius = parseInt(layoutCardBorderRadius) || 12;
+  const frostedBlurRaw = String(layoutFrostedGlassIntensity || '15').replace(/[^0-9]/g, '');
+  const frostedBlur = frostedBlurRaw || '15';
+  
+  const cardCssVars = `<style>:root { --card-padding: 1.25rem; --card-radius: ${cardRadius}px; --frosted-glass-blur: ${frostedBlur}px; }</style>`;
   html = html.replace('</head>', `${cardCssVars}</head>`);
 
   // 自动注入字体资源
@@ -1108,6 +1347,15 @@ export async function onRequest(context) {
       html = html.replace('</head>', `${customCardCss}</head>`);
   }
 
+  // Inject Global Data for Client-side JS
+  const safeJson = JSON.stringify(allSites).replace(/</g, '\\u003c');
+  const globalDataScript = `
+    <script>
+      window.IORI_SITES = ${safeJson};
+    </script>
+  `;
+  html = html.replace('</head>', `${globalDataScript}</head>`);
+
   // Inject Layout Config for Client-side JS
   const layoutConfigScript = `
     <script>
@@ -1117,7 +1365,8 @@ export async function onRequest(context) {
         hideCategory: ${layoutHideCategory},
         gridCols: "${layoutGridCols}",
         cardStyle: "${layoutCardStyle}",
-        enableFrostedGlass: ${layoutEnableFrostedGlass}
+        enableFrostedGlass: ${layoutEnableFrostedGlass},
+        rememberLastCategory: ${homeRememberLastCategory}
       };
     </script>
   `;
@@ -1130,6 +1379,7 @@ export async function onRequest(context) {
     .replace('{{FOOTER_CLASS}}', footerClass)
     .replace('{{HITOKOTO_CLASS}}', hitokotoClass)
     .replace('{{LEFT_TOP_ACTION}}', leftTopActionHtml)
+    .replace('{{RIGHT_TOP_ACTION}}', topRightActionsHtml)
     .replace(/{{SITE_NAME}}/g, escapeHTML(siteName))
     .replace(/{{SITE_DESCRIPTION}}/g, escapeHTML(siteDescription))
     .replace('{{FOOTER_TEXT}}', escapeHTML(footerText))
@@ -1156,11 +1406,6 @@ export async function onRequest(context) {
     .replace('{{SIDEBAR_CLASS}}', sidebarClass)
     .replace('{{MAIN_CLASS}}', mainClass)
     .replace('{{SIDEBAR_TOGGLE_CLASS}}', sidebarToggleClass);
-
-  // 关键：在 Custom Wallpaper 模式下，为 Sidebar 添加毛玻璃效果
-  if (isCustomWallpaper) {
-      html = html.replace('bg-white shadow-md border-r border-primary-100/60', 'bg-white/40 backdrop-blur-[10px] shadow-lg border-r border-white/10');
-  }
 
   const response = new Response(html, {
     headers: { 'Content-Type': 'text/html; charset=utf-8' }

@@ -10,9 +10,9 @@ function escapeHTML(str) {
     .replace(/'/g, '&#39;');
 }
 
-async function createAdminSession(env) {
+async function createAdminSession(env, ttl = 86400) {
   const token = crypto.randomUUID();
-  await env.NAV_AUTH.put(`session_${token}`, Date.now().toString(), { expirationTtl: 86400 });
+  await env.NAV_AUTH.put(`session_${token}`, Date.now().toString(), { expirationTtl: ttl });
   return token;
 }
 
@@ -74,6 +74,16 @@ function renderLoginPage(message = '') {
         <label for="password">密码</label>
         <input type="password" id="password" name="password" required autocomplete="current-password">
       </div>
+      <div class="form-group">
+        <label for="duration">登录有效期</label>
+        <select id="duration" name="duration" style="width: 100%; padding: 0.875rem 1rem; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem; background-color: white;">
+          <option value="1">1 天</option>
+          <option value="7">7 天</option>
+          <option value="30">30 天</option>
+          <option value="60">60 天</option>
+          <option value="90">90 天</option>
+        </select>
+      </div>
       ${hasError ? `<div class="error-message">${safeMessage}</div>` : ''}
       <button type="submit">登 录</button>
     </form>
@@ -83,11 +93,22 @@ function renderLoginPage(message = '') {
     // 调试信息
     console.log('Login page loaded');
     
+    const durationSelect = document.getElementById('duration');
+    // Restore selection
+    const savedDuration = localStorage.getItem('login_duration');
+    if (savedDuration) {
+        durationSelect.value = savedDuration;
+    }
+
     // 检测表单提交
     document.querySelector('form').addEventListener('submit', function(e) {
       console.log('Form submitting...');
       const name = document.getElementById('username').value;
       const password = document.getElementById('password').value;
+      
+      // Save selection
+      localStorage.setItem('login_duration', durationSelect.value);
+
       console.log('Username:', name);
       console.log('Password length:', password.length);
     });
@@ -121,8 +142,10 @@ export async function onRequestPost(context) {
     const formData = await request.formData();
     const name = (formData.get('username') || '').trim();
     const password = (formData.get('password') || '').trim();
+    const durationDays = parseInt(formData.get('duration') || '1', 10);
+    const ttl = durationDays * 86400;
 
-    console.log('Login attempt - Username:', name);
+    console.log('Login attempt - Username:', name, 'Duration:', durationDays, 'days');
 
     if (!name || !password) {
       console.log('Missing credentials');
@@ -144,14 +167,14 @@ export async function onRequestPost(context) {
 
     if (isValid) {
       console.log('Login successful, creating session');
-      const token = await createAdminSession(env);
+      const token = await createAdminSession(env, ttl);
       console.log('Session token created:', token.substring(0, 8) + '...');
       
       return new Response(null, {
         status: 302,
         headers: {
           'Location': '/admin',
-          'Set-Cookie': buildSessionCookie(token),
+          'Set-Cookie': buildSessionCookie(token, { maxAge: ttl }),
         },
       });
     }
