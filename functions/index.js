@@ -763,7 +763,7 @@ export async function onRequest(context) {
 
   
 
-                                    const linksHtml = layoutHideLinks ? '' : `
+                                                                        const linksHtml = layoutHideLinks ? '' : `
 
   
 
@@ -771,15 +771,31 @@ export async function onRequest(context) {
 
   
 
-                                          <div class="mt-3 flex items-center justify-between">
+                                                      <div class="mt-3 flex items-center justify-between">
 
   
 
-                    <span class="text-xs text-primary-600 dark:text-primary-400 truncate max-w-[140px]" title="${safeDisplayUrl}">${escapeHTML(safeDisplayUrl)}</span>
+                          
 
   
 
-                    <button class="copy-btn relative flex items-center px-2 py-1 ${hasValidUrl ? 'bg-accent-100 text-accent-700 hover:bg-accent-200 dark:bg-accent-900/30 dark:text-accent-300 dark:hover:bg-accent-900/50' : 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'} rounded-full text-xs font-medium transition-colors" data-url="${escapeHTML(normalizedUrl)}" ${hasValidUrl ? '' : 'disabled'}>
+                                                        <span class="text-xs text-primary-600 dark:text-primary-400 truncate flex-1 min-w-0 mr-2" title="${safeDisplayUrl}">${escapeHTML(safeDisplayUrl)}</span>
+
+  
+
+                          
+
+  
+
+                                                        <button class="copy-btn relative flex items-center px-2 py-1 ${hasValidUrl ? 'bg-accent-100 text-accent-700 hover:bg-accent-200 dark:bg-accent-900/30 dark:text-accent-300 dark:hover:bg-accent-900/50' : 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'} rounded-full text-xs font-medium transition-colors" data-url="${escapeHTML(normalizedUrl)}" ${hasValidUrl ? '' : 'disabled'}>
+
+  
+
+                          
+
+  
+
+                                    
 
   
 
@@ -935,19 +951,23 @@ export async function onRequest(context) {
 
   
 
-                        ${
+                                                ${
 
   
 
-                          logoUrl
+                                                  logoUrl
 
   
 
-                            ? `<img src="${escapeHTML(logoUrl)}" alt="${safeName}" class="w-10 h-10 rounded-lg object-cover bg-gray-100 dark:bg-gray-700">`
+                                                    ? `<img src="${escapeHTML(logoUrl)}" alt="${safeName}" class="w-10 h-10 rounded-lg object-cover bg-gray-100 dark:bg-gray-700" decoding="async" loading="lazy">`
 
   
 
-                            : `<div class="w-10 h-10 rounded-lg bg-primary-600 flex items-center justify-center text-white font-semibold text-lg shadow-inner">${cardInitial}</div>`
+                                                    : `<div class="w-10 h-10 rounded-lg bg-primary-600 flex items-center justify-center text-white font-semibold text-lg shadow-inner">${cardInitial}</div>`
+
+  
+
+                        
 
   
 
@@ -1019,8 +1039,8 @@ export async function onRequest(context) {
   const datalistOptions = categories.map((cat) => `<option value="${escapeHTML(cat.catelog)}">`).join('');
   
   const headingPlainText = currentCatalogName
-    ? `${currentCatalogName} · ${sites.length} 个网站`
-    : `全部收藏 · ${sites.length} 个网站`;
+    ? `${currentCatalogName} · ${sites.length} 个书签`
+    : `全部收藏 · ${sites.length} 个书签`;
   const headingText = escapeHTML(headingPlainText);
   const headingDefaultAttr = escapeHTML(headingPlainText);
   const headingActiveAttr = catalogExists ? escapeHTML(currentCatalogName) : '';
@@ -1140,7 +1160,7 @@ export async function onRequest(context) {
                           <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
                         </svg>
                     </button>
-                    <div id="horizontalMoreDropdown" class="dropdown-menu hidden absolute mt-2 w-auto right-0 origin-top-right z-50">
+                    <div id="horizontalMoreDropdown" class="dropdown-menu hidden absolute mt-2 w-auto z-50">
                         <!-- Dropdown items will be moved here by JS -->
                     </div>
                 </div>
@@ -1262,42 +1282,64 @@ export async function onRequest(context) {
   const safeWallpaperUrl = sanitizeUrl(layoutCustomWallpaper);
   const defaultBgColor = '#fdf8f3';
   
-  // 统一构建背景层逻辑
-  let bgLayerStyle = '';
+  // 统一构建背景层逻辑 - 采用 img 标签方案以解决移动端缩放问题
+  let bgLayerHtml = '';
+  
   if (safeWallpaperUrl) {
-      const blurStyle = layoutEnableBgBlur ? `filter: blur(${layoutBgBlurIntensity}px);` : '';
-      bgLayerStyle = `background-image: url('${safeWallpaperUrl}'); background-size: cover; background-position: center; ${blurStyle}`;
+      const blurStyle = layoutEnableBgBlur ? `filter: blur(${layoutBgBlurIntensity}px); transform: scale(1.02);` : '';
+      // transform: scale(1.02) 是为了防止模糊后边缘出现白边
+      
+      bgLayerHtml = `
+        <div id="fixed-background" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -9999; pointer-events: none; overflow: hidden;">
+          <img src="${safeWallpaperUrl}" alt="" style="width: 100%; height: 100%; object-fit: cover; ${blurStyle}" />
+        </div>
+      `;
   } else {
-      bgLayerStyle = `background-color: ${defaultBgColor};`;
+      bgLayerHtml = `
+        <div id="fixed-background" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -9999; pointer-events: none; background-color: ${defaultBgColor};"></div>
+      `;
   }
   
-  // 使用 transform 开启硬件加速，扩大范围至 -300px 以应对强力回弹
-  const bgLayerHtml = `<div id="fixed-background" style="position: fixed; top: -300px; left: -300px; right: -300px; bottom: -300px; z-index: -9999; ${bgLayerStyle} pointer-events: none; transform: translateZ(0); will-change: transform;"></div>`;
-  
-  // 注入全局样式：
-  // 1. html, body 禁止回弹
-  // 2. body 背景透明 (依靠 fixed div)
-  // 3. html 设置底色保险 (有壁纸时用黑色避免白边，无壁纸时用默认色)
+  // 注入全局样式
   const globalScrollCss = `
     <style>
-      html {
-        overscroll-behavior: none;
-        background-color: ${safeWallpaperUrl ? '#000000' : defaultBgColor};
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
         height: 100%;
+        overflow: hidden; /* 关键：禁止 body 滚动，交由内部容器接管 */
+      }
+      #app-scroll {
+        width: 100%;
+        height: 100%;
+        overflow-y: auto; /* 允许纵向滚动 */
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch; /* iOS 原生惯性滚动 */
       }
       body {
-        overscroll-behavior: none;
         background-color: transparent !important;
-        min-height: 100%;
-        position: relative;
+      }
+      #fixed-background {
+        /* 仅对必要的属性进行平滑过渡 */
+        transition: background-color 0.3s ease, filter 0.3s ease;
+      }
+      /* 修复 iOS 上 100vh 问题 (针对背景层) */
+      @supports (-webkit-touch-callout: none) {
+        #fixed-background {
+          height: -webkit-fill-available;
+        }
       }
     </style>
   `;
 
   html = html.replace('</head>', `${globalScrollCss}</head>`);
   
-  // 替换 body 标签
-  html = html.replace('<body class="bg-secondary-50 font-sans text-gray-800">', `<body class="bg-secondary-50 dark:bg-gray-900 font-sans text-gray-800 dark:text-gray-100 relative ${isCustomWallpaper ? 'custom-wallpaper' : ''}">${bgLayerHtml}`);
+  // 替换 body 标签结构，增加 #app-scroll 滚动容器
+  html = html.replace('<body class="bg-secondary-50 font-sans text-gray-800">', `<body class="bg-secondary-50 dark:bg-gray-900 font-sans text-gray-800 dark:text-gray-100 relative ${isCustomWallpaper ? 'custom-wallpaper' : ''}">${bgLayerHtml}<div id="app-scroll">`);
+  
+  // 闭合滚动容器
+  html = html.replace('</body>', '</div></body>');
   
   // Inject Card CSS Variables
   const cardRadius = parseInt(layoutCardBorderRadius) || 12;

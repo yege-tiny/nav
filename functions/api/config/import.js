@@ -42,23 +42,26 @@ export async function onRequestPost(context) {
     }
 
     const db = env.NAV_DB;
-    const BATCH_SIZE = 100;
+    // Cloudflare D1 限制单条语句变量数为 100。
+    // 在导入过程中的 SELECT ... WHERE IN (...) 查询中，
+    // 将分块大小设为 50 以确保绝对安全且不影响效率。
+    const BATCH_SIZE = 50;
 
     // --- Category Processing ---
     const oldCatIdToNewCatIdMap = new Map(); // Maps JSON ID -> DB ID
     let categoryNameToIdMap = new Map(); // For legacy format mapping
     
     // 1. Fetch all existing categories from DB
-    // We need parent_id to correctly identify subcategories, and is_private for enforcement
-    const { results: existingDbCategories } = await db.prepare('SELECT id, catelog, parent_id, is_private FROM category').all();
+    const { results: existingDbCategoriesRaw } = await db.prepare('SELECT id, catelog, parent_id, is_private FROM category').all();
+    const existingDbCategories = existingDbCategoriesRaw || [];
     
     // Helper to find existing category by name and parent_id
     const findExistingCategory = (name, parentId) => {
-        if (!existingDbCategories) return null;
-        return existingDbCategories.find(c =>
-            c.catelog === name &&
-            (c.parent_id === parentId || (c.parent_id === null && parentId === 0))
-        );
+        const normalizedParentId = (parentId === null || parentId === undefined) ? 0 : parseInt(parentId, 10);
+        return existingDbCategories.find(c => {
+            const dbParentId = (c.parent_id === null || c.parent_id === undefined) ? 0 : parseInt(c.parent_id, 10);
+            return c.catelog === name && dbParentId === normalizedParentId;
+        });
     };
 
     if (isNewFormat) {

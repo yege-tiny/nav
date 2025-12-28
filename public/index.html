@@ -6,7 +6,7 @@
   <title>{{SITE_NAME}} - 网址导航</title>
   <link href="https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet"/>
   <link rel="icon" href="/favicon.svg?v=4" type="image/svg+xml">
-  <link rel="stylesheet" href="/css/style.css?v=11">
+  <link rel="stylesheet" href="/css/style.css?v=12">
   <script>
     // Init Theme ASAP to prevent FOUC
     if (localStorage.getItem('theme') === 'dark') {
@@ -126,7 +126,7 @@
         <h2 class="text-xl font-semibold text-gray-800 {{STATS_VISIBLE}}" {{STATS_STYLE}} data-role="list-heading" data-default="{{HEADING_DEFAULT}}" data-active="{{HEADING_ACTIVE}}">
           {{HEADING_TEXT}}
         </h2>
-        <div class="text-sm {{HITOKOTO_CLASS}} md:block {{HITOKOTO_VISIBLE}}" {{HITOKOTO_STYLE}}>
+        <div id="hitokoto-parent" class="text-sm {{HITOKOTO_CLASS}} md:block {{HITOKOTO_VISIBLE}}" {{HITOKOTO_STYLE}}>
           <div id="hitokoto"><a href="#" target="_blank" id="hitokoto_text" {{HITOKOTO_STYLE}}>{{HITOKOTO_CONTENT}}</a></div>
         </div>
       </div>
@@ -214,6 +214,6 @@
     </div>
   </div>
   
-  <script src="/js/main.js?v=13"></script>
+  <script src="/js/main.js?v=14"></script>
 </body>
 </html>

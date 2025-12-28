@@ -59,13 +59,22 @@ html.dark body.custom-wallpaper .sidebar {
 
 /* 3. 卡片基础与悬停样式 */
 .site-card {
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), 
+              box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+              background-color 0.3s ease,
+              border-color 0.3s ease,
+              color 0.3s ease;
   will-change: transform;
-  border-radius: var(--card-radius) !important; /* 强制应用后台设置的圆角 */
+  container-type: inline-size; /* 开启容器查询，允许子元素监听卡片宽度 */
+  container-name: card;
+  border-radius: var(--card-radius) !important;
   width: 100%;
   height: 100%; /* 撑满 Grid 单元高度 */
   display: flex;
   flex-direction: column;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  contain: content; /* 关键：隔离卡片内部渲染，防止大量图片加载或颜色改变引发全局重绘 */
 }
 
 .site-card-content {
@@ -123,11 +132,26 @@ html.dark body.custom-wallpaper .sidebar {
     color: #9ca3af !important;
 }
 
+/* 文字颜色过渡 */
+.site-title, 
+.site-card p, 
+.site-card-content span,
+.site-card-content a,
+.nav-btn,
+.search-engine-option {
+  /* 优化：指定特定属性，减少主题切换时的计算量 */
+  transition: color 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
+}
+
 .dark .site-card-content .text-primary-600 {
     color: #60a5fa !important;
 }
 
 /* 4. 头部/容器深色化 */
+header {
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
 .dark header {
     background-color: transparent !important;
 }
@@ -213,16 +237,34 @@ html.dark body.custom-wallpaper .sidebar {
 .site-card:not(.style-2):hover .site-title { transform: scale(1.2); transition-delay: 0.1s; }
 
 /* 风格二 (垂直布局) */
-.site-card.style-2 .flex.items-start { flex-direction: column; align-items: center; text-align: center; }
-.site-card.style-2 .site-icon { margin-right: 0; margin-bottom: 0.5rem; width: 3rem; height: 3rem; transition: transform 0.3s ease; }
+.site-card.style-2 .flex.items-start,
+@media (max-width: 400px) { .site-card .flex.items-start { flex-direction: column; align-items: center; text-align: center; } }
+
+.site-card.style-2 .site-icon,
+@media (max-width: 400px) { .site-card .site-icon { margin-right: 0; margin-bottom: 0.5rem; width: 3rem; height: 3rem; transition: transform 0.3s ease; } }
+
 .site-card.style-2:hover .site-icon { transform: scale(1.1); }
-.site-card.style-2 .site-icon img, .site-card.style-2 .site-icon div { margin: 0 auto; }
-.site-card.style-2 .site-title { text-align: center; margin-bottom: 0.25rem; display: block; width: 100%; }
-.site-card.style-2 .flex-1 { width: 100%; display: flex; flex-direction: column; align-items: center; }
-.site-card.style-2 .inline-flex { margin-top: 0.25rem; margin-bottom: 0.5rem; }
-.site-card.style-2 p { text-align: center; margin-top: 0.5rem; }
-.site-card.style-2 .mt-3.flex { margin-top: auto; justify-content: space-between; padding-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.05); }
-.dark .site-card.style-2 .mt-3.flex { border-top: 1px solid rgba(255,255,255,0.1); }
+
+.site-card.style-2 .site-icon img, .site-card.style-2 .site-icon div,
+@media (max-width: 400px) { .site-card .site-icon img, .site-card .site-icon div { margin: 0 auto; } }
+
+.site-card.style-2 .site-title,
+@media (max-width: 400px) { .site-card .site-title { text-align: center; margin-bottom: 0.25rem; display: block; width: 100%; transform-origin: center !important; } }
+
+.site-card.style-2 .flex-1,
+@media (max-width: 400px) { .site-card .flex-1 { width: 100%; display: flex; flex-direction: column; align-items: center; } }
+
+.site-card.style-2 .inline-flex,
+@media (max-width: 400px) { .site-card .inline-flex { margin-top: 0.25rem; margin-bottom: 0.5rem; } }
+
+.site-card.style-2 p,
+@media (max-width: 400px) { .site-card p { text-align: center; margin-top: 0.5rem; } }
+
+.site-card.style-2 .mt-3.flex,
+@media (max-width: 400px) { .site-card .mt-3.flex { margin-top: auto; justify-content: space-between; padding-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.05); } }
+
+.dark .site-card.style-2 .mt-3.flex,
+@media (max-width: 400px) { .dark .site-card .mt-3.flex { border-top: 1px solid rgba(255,255,255,0.1); } }
 
 /* 复制提示 */
 @keyframes fadeInOut {
@@ -232,6 +274,46 @@ html.dark body.custom-wallpaper .sidebar {
   100% { opacity: 0; transform: translateY(-10px); }
 }
 .copy-success-animation { animation: fadeInOut 2s ease forwards; }
+
+/* 动态隐藏复制文字：当卡片自身宽度不足时 */
+@container card (max-width: 250px) {
+  .copy-text {
+    display: none !important;
+  }
+  .copy-btn svg {
+    margin-right: 0 !important;
+  }
+  .copy-btn {
+    padding: 0.25rem !important;
+  }
+}
+
+.copy-btn {
+  white-space: nowrap !important; /* 强制文字不换行 */
+  flex-shrink: 0 !important;    /* 禁止按钮被压缩 */
+}
+
+@media (max-width: 440px) {
+  /* 隐藏“复制”文字，保留图标 */
+  .copy-text {
+    display: none !important;
+  }
+  
+  /* 确保按钮依然显示，且移除图标的右边距（因为文字没了） */
+  .copy-btn {
+    display: inline-flex !important;
+    padding: 0.25rem !important;
+  }
+  
+  .copy-btn svg {
+    margin-right: 0 !important;
+  }
+  
+  /* 确保链接文本容器能利用剩余空间 */
+  .site-card .mt-3.flex.justify-between span.text-xs.truncate {
+    max-width: calc(100% - 30px) !important; 
+  }
+}
 
 /* 卡片加载动画 */
 @keyframes cardEnter {
@@ -414,27 +496,53 @@ html:not(.dark) body.custom-wallpaper .sidebar {
 .dark #horizontalMoreDropdown .dropdown-item:hover { background-color: rgba(255, 255, 255, 0.1); color: #fff; }
 .dark #horizontalMoreDropdown .dropdown-item.active { background-color: rgba(59, 130, 246, 0.2); color: #60a5fa; }
 
-/* 针对右侧"更多"菜单的特殊处理：子菜单向左弹出，防止溢出屏幕 */
-#horizontalMoreDropdown .dropdown-menu {
-  left: auto;
-  right: 100%;
-  margin-left: 0;
-  margin-right: 0.2rem;
-  transform: translateX(4px) translateY(0);
+/* 针对首页“更多”菜单的特殊处理 */
+/* 1. 确保一级菜单以三个点为中心弹出 */
+#horizontalMoreDropdown {
+  left: 50% !important;
+  right: auto !important;
+  transform: translateX(-50%) translateY(4px) !important;
+  z-index: 100 !important; /* 极大提高层级，确保在所有卡片之上 */
 }
 
-#horizontalMoreDropdown .dropdown-menu::after {
-  left: auto;
-  right: -0.4rem;
+#horizontalMoreDropdown:not(.hidden) {
+  transform: translateX(-50%) translateY(0) scale(1) !important;
+}
+
+/* 2. 确保子菜单向左弹出，防止超出屏幕右侧 */
+#horizontalMoreDropdown .dropdown-menu {
+  left: auto !important;
+  right: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0rem !important; /* 消除间距 */
+  transform: translateX(4px) translateY(0) !important;
+  z-index: 110 !important;
+}
+
+/* 增加更宽的透明衔接层，防止鼠标移动到子菜单时因为微小间隙导致菜单消失 */
+#horizontalMoreDropdown .menu-item-wrapper > .dropdown-menu::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -20px; /* 向右延伸 20px 覆盖感应区 */
+  width: 20px;
+  height: 100%;
+  background: transparent;
 }
 
 #horizontalMoreDropdown .menu-item-wrapper:hover > .dropdown-menu {
-  transform: translateX(0) translateY(0);
+  transform: translateX(0) translateY(0) !important;
+}
+
+/* 3. 当下拉菜单打开时，禁用下方卡片的放大效果，防止干扰 */
+body.menu-open .site-card:hover {
+  transform: none !important;
+  z-index: 1 !important;
 }
 
 /* Force Card Hover Scale */
 .site-card:hover {
-  transform: scale(1.15) translateY(-10px) !important;
+  transform: scale(1.1) translateY(-10px);
 }
 
 /* ========================================= */
@@ -490,4 +598,80 @@ html:not(.dark) .dropdown-item:hover {
 }
 html:not(.dark) .dropdown-item.active {
     color: #1d4ed8 !important;
+}
+/* 限制一言显示范围，防止移动端撑开导致标题换行 */
+#hitokoto {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%; 
+  text-align: right;
+  margin-left: auto; /* 确保在 flex 容器中靠右 */
+}
+
+/* 确保一言的父级容器也靠右对齐 */
+#hitokoto-parent {
+  display: flex;
+  justify-content: flex-end;
+  flex: 1;
+}
+
+[data-role="list-heading"] {
+  white-space: nowrap; 
+  flex-shrink: 0; 
+  margin-right: 1rem;
+}
+
+@media (max-width: 440px) {
+  #hitokoto {
+    max-width: 50%;
+    font-size: 0.75rem; /* 窄屏缩小字体 */
+  }
+}
+@media (max-width: 400px) {
+  .site-card .flex.items-start {
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+  }
+  .site-card .site-icon {
+    margin-right: 0 !important;
+    margin-bottom: 0.5rem !important;
+    width: 3.5rem !important;
+    height: 3.5rem !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+  }
+  .site-card .site-icon img,
+  .site-card .site-icon div {
+    margin: 0 auto !important;
+  }
+  .site-card .site-title {
+    text-align: center !important;
+    width: 100% !important;
+    display: block !important;
+    transform-origin: center !important;
+  }
+  .site-card .flex-1 {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+  .site-card p {
+    text-align: center !important;
+    margin-top: 0.5rem !important;
+  }
+  .site-card .mt-3.flex {
+    margin-top: auto !important;
+    justify-content: space-between !important;
+    padding-top: 0.5rem !important;
+    border-top: 1px solid rgba(0,0,0,0.05) !important;
+  }
+  .dark .site-card .mt-3.flex {
+    border-top: 1px solid rgba(255,255,255,0.1) !important;
+  }
 }

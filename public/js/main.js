@@ -294,6 +294,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!heading) return;
     
     const visibleCount = (count !== undefined) ? count : (sitesGrid?.querySelectorAll('.site-card:not(.hidden)').length || 0);
+    const isMobile = window.innerWidth < 440;
     
     // Explicitly handle navigation state
     if (activeCatalog !== undefined) {
@@ -306,16 +307,23 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     if (keyword) {
-      heading.textContent = `搜索结果 · ${visibleCount} 个网站`;
+      heading.textContent = isMobile ? `${visibleCount} 个书签` : `搜索结果 · ${visibleCount} 个书签`;
     } else {
       const currentActive = heading.dataset.active;
-      if (currentActive) {
-          heading.textContent = `${currentActive} · ${visibleCount} 个网站`;
+      if (isMobile) {
+          heading.textContent = `${visibleCount} 个书签`;
       } else {
-          heading.textContent = `全部收藏 · ${visibleCount} 个网站`;
+          if (currentActive) {
+              heading.textContent = `${currentActive} · ${visibleCount} 个书签`;
+          } else {
+              heading.textContent = `全部收藏 · ${visibleCount} 个书签`;
+          }
       }
     }
   }
+
+  // 初次加载时根据屏幕宽度修正标题显示
+  updateHeading();
   
   // ========== 一言 API ==========
   const hitokotoContainer = document.querySelector('#hitokoto').parentElement;
@@ -346,32 +354,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (navContainer && moreWrapper && moreBtn && dropdown) {
     resetNav = () => {
-        // Move items back from dropdown to navContainer (before moreWrapper)
         const dropdownItems = Array.from(dropdown.children);
-        // We prepended to dropdown, so the order in dropdown is [N, N+1...].
-        // We should append them back in order.
-        // Actually, checkOverflow prepends from the end. So if we had 1,2,3,4,5.
-        // Wrap -> 5 moved. Dropdown [5].
-        // Wrap -> 4 moved. Dropdown [4, 5].
-        // So dropdown order is correct sequence.
-        // We just need to insert them back before moreWrapper.
         dropdownItems.forEach(item => {
-            // Restore wrapper styles if saved
-            if (item.dataset.originalClass) {
-                item.className = item.dataset.originalClass;
-            }
-            
-            // Restore inner link styles
+            if (item.dataset.originalClass) item.className = item.dataset.originalClass;
             const link = item.querySelector('a');
-            if (link && link.dataset.originalClass) {
-                link.className = link.dataset.originalClass;
-            }
-
+            if (link && link.dataset.originalClass) link.className = link.dataset.originalClass;
             navContainer.insertBefore(item, moreWrapper);
         });
-        
         moreWrapper.classList.add('hidden');
-        dropdown.classList.add('hidden');
         moreBtn.classList.remove('active', 'text-primary-600', 'bg-secondary-100');
         moreBtn.classList.add('inactive');
     };
@@ -465,13 +455,22 @@ document.addEventListener('DOMContentLoaded', function() {
     // Toggle Dropdown
     moreBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        dropdown.classList.toggle('hidden');
+        const isHidden = dropdown.classList.contains('hidden');
+        if (isHidden) {
+            dropdown.classList.remove('hidden');
+            document.body.classList.add('menu-open');
+        } else {
+            dropdown.classList.add('hidden');
+            document.body.classList.remove('menu-open');
+        }
     });
 
     // Close on click inside dropdown
     dropdown.addEventListener('click', (e) => {
-        if (e.target.closest('a')) {
+        const link = e.target.closest('a');
+        if (link) {
             dropdown.classList.add('hidden');
+            document.body.classList.remove('menu-open');
         }
     });
 
@@ -479,6 +478,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('click', (e) => {
         if (!dropdown.contains(e.target) && !moreBtn.contains(e.target)) {
             dropdown.classList.add('hidden');
+            document.body.classList.remove('menu-open');
         }
     });
   }
@@ -599,7 +599,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         let logoHtml = '';
         if (site.logo) {
-             logoHtml = `<img src="${escapeHTML(site.logo)}" alt="${safeName}" class="w-10 h-10 rounded-lg object-cover bg-gray-100">`;
+             logoHtml = `<img src="${escapeHTML(site.logo)}" alt="${safeName}" class="w-10 h-10 rounded-lg object-cover bg-gray-100" decoding="async" loading="lazy">`;
         } else {
              logoHtml = `<div class="w-10 h-10 rounded-lg bg-primary-600 flex items-center justify-center text-white font-semibold text-lg shadow-inner">${cardInitial}</div>`;
         }
@@ -609,7 +609,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const hasValidUrl = !!safeUrl;
         const linksHtml = hideLinks ? '' : `
           <div class="mt-3 flex items-center justify-between">
-            <span class="text-xs text-primary-600 truncate max-w-[140px]" title="${safeUrl}">${safeUrl || '未提供链接'}</span>
+            <span class="text-xs text-primary-600 truncate flex-1 min-w-0 mr-2" title="${safeUrl}">${safeUrl || '未提供链接'}</span>
             <button class="copy-btn relative flex items-center px-2 py-1 ${hasValidUrl ? 'bg-accent-100 text-accent-700 hover:bg-accent-200' : 'bg-gray-200 text-gray-400 cursor-not-allowed'} rounded-full text-xs font-medium transition-colors" data-url="${safeUrl}" ${hasValidUrl ? '' : 'disabled'}>
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ${isFiveCols || isSixCols ? '' : 'mr-1'}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
@@ -640,8 +640,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Remove animation class after completion to ensure clean state
         card.addEventListener('animationend', () => {
             card.classList.remove('card-anim-enter');
-            // Force reflow not strictly necessary if we just remove class, but good for safety
-            // Remove style attribute only if we set delay
+            card.style.animation = 'none'; // 彻底禁用动画，防止干扰 Hover
             if (delay > 0) card.style.removeProperty('animation-delay');
         }, { once: true });
         
@@ -695,35 +694,34 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function updateNavigationState(catalogId) {
-      // 1. Reset everything to main container first
-      if (resetNav) resetNav();
-      
-      // 2. Update states on standard nav items
+      // 1. Update states on standard nav items (in main container and dropdown)
+      // 注意：不再调用 resetNav() 以避免打断用户交互
+      const allLinks = document.querySelectorAll('a.nav-btn, a.dropdown-item');
+      allLinks.forEach(link => {
+          const linkId = link.getAttribute('data-id');
+          const isActive = (!catalogId && !linkId) || (String(linkId) === String(catalogId));
+          
+          if (isActive) {
+              link.classList.remove('inactive');
+              link.classList.add('active', 'nav-item-active');
+          } else {
+              link.classList.remove('active', 'nav-item-active');
+              link.classList.add('inactive');
+          }
+          // 保存状态，供 checkOverflow 恢复使用
+          link.dataset.originalClass = link.className;
+      });
+
+      // 2. Parent highlighting
       const navContainer = document.getElementById('horizontalCategoryNav');
       if (navContainer) {
-          const links = navContainer.querySelectorAll('a.nav-btn, a.dropdown-item');
-          links.forEach(link => {
-              const linkId = link.getAttribute('data-id');
-              // 如果 catalogId 为空且 link 没有 data-id，或者 ID 匹配
-              const isActive = (!catalogId && !linkId) || (String(linkId) === String(catalogId));
-              
-              if (isActive) {
-                  link.classList.remove('inactive');
-                  link.classList.add('active', 'nav-item-active');
-              } else {
-                  link.classList.remove('active', 'nav-item-active');
-                  link.classList.add('inactive');
-              }
-              link.dataset.originalClass = link.className;
-          });
-          
-          // Parent highlighting (横向菜单的父级高亮)
           const topWrappers = Array.from(navContainer.children);
           topWrappers.forEach(wrapper => {
               const topLink = wrapper.querySelector(':scope > a.nav-btn'); 
               if (!topLink) return;
               
               const topLinkId = topLink.getAttribute('data-id');
+              // 如果顶级项不是当前分类，检查其子项是否有匹配
               if (String(topLinkId) !== String(catalogId)) {
                   const subLink = wrapper.querySelector(`a[data-id="${catalogId}"]`);
                   if (subLink) {
@@ -735,8 +733,17 @@ document.addEventListener('DOMContentLoaded', function() {
           });
       }
       
-      // 3. Re-calculate overflow
-      if (checkOverflow) checkOverflow();
+      // 3. Highlight "More" button if active category is inside dropdown
+      if (dropdown && moreBtn) {
+          const activeInDropdown = dropdown.querySelector('.active');
+          if (activeInDropdown) {
+               moreBtn.classList.add('active', 'text-primary-600', 'bg-secondary-100');
+               moreBtn.classList.remove('inactive');
+          } else {
+               moreBtn.classList.remove('active', 'text-primary-600', 'bg-secondary-100');
+               moreBtn.classList.add('inactive');
+          }
+      }
       
       // Update Sidebar (Vertical Menu)
       const sidebar = document.getElementById('sidebar');
