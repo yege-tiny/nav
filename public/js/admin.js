@@ -230,7 +230,7 @@ window.createCascadingDropdown = function(containerId, inputId, categoriesTree, 
     const input = document.getElementById(inputId);
     if (!container || !input) return;
     
-    const isFilter = inputId === 'categoryFilter';
+    const isFilter = inputId === 'categoryFilter' || inputId === 'batchCategoryFilter';
 
     let initialLabel = '请选择分类';
     const findLabel = (nodes, id) => {
@@ -321,7 +321,7 @@ window.createCascadingDropdown = function(containerId, inputId, categoriesTree, 
             item.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (isFilter) {
-                    input.value = node.catelog;
+                    input.value = node.id;
                 } else {
                     input.value = node.id;
                 }
@@ -383,7 +383,7 @@ if (categoryFilter) {
 }
 
 // Fetch Configs (Bookmarks)
-window.fetchConfigs = function(page = currentPage, keyword = currentSearchKeyword, catalog = currentCategoryFilter) {
+window.fetchConfigs = function(page = currentPage, keyword = currentSearchKeyword, catalogId = currentCategoryFilter) {
   let url = `/api/config?page=${page}&pageSize=${pageSize}`;
   const params = new URLSearchParams();
   params.append('page', page);
@@ -393,8 +393,8 @@ window.fetchConfigs = function(page = currentPage, keyword = currentSearchKeywor
     params.append('keyword', keyword);
   }
 
-  if (catalog) {
-    params.append('catalog', catalog);
+  if (catalogId) {
+    params.append('catalogId', catalogId);
   }
 
   url = `/api/config?${params.toString()}`;
@@ -765,7 +765,17 @@ function saveSortOrder() {
   if (updates.length > 0) {
     window.showMessage('正在保存排序...', 'info');
     Promise.all(updates)
-      .then(() => window.showMessage('排序已保存', 'success'))
+      .then(() => {
+        window.showMessage('排序已保存', 'success');
+        // Update local memory data
+        cards.forEach((card, index) => {
+           const id = card.dataset.id;
+           const config = allConfigs.find(c => c.id == id);
+           if (config) {
+               config.sort_order = startIndex + index;
+           }
+        });
+      })
       .catch(err => window.showMessage('保存排序失败: ' + err.message, 'error'));
   }
 }
@@ -832,6 +842,39 @@ function setupBookmarkPrivacyLinkage(selectId, checkboxId) {
 document.addEventListener('DOMContentLoaded', () => {
    setupBookmarkPrivacyLinkage('addBookmarkCatelog', 'addBookmarkIsPrivate');
    setupBookmarkPrivacyLinkage('editBookmarkCatelog', 'editBookmarkIsPrivate');
+
+   // Delete Bookmark Modal Events
+   const deleteConfirmModal = document.getElementById('deleteConfirmModal');
+   const closeDeleteConfirmModal = document.getElementById('closeDeleteConfirmModal');
+   const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+   const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+
+   if (deleteConfirmModal) {
+       if (closeDeleteConfirmModal) {
+           closeDeleteConfirmModal.onclick = () => {
+               deleteConfirmModal.style.display = 'none';
+           };
+       }
+       if (cancelDeleteBtn) {
+           cancelDeleteBtn.onclick = () => {
+               deleteConfirmModal.style.display = 'none';
+           };
+       }
+       if (confirmDeleteBtn) {
+           confirmDeleteBtn.onclick = () => {
+               if (window.deleteTargetId) {
+                   window.performDelete(window.deleteTargetId);
+                   deleteConfirmModal.style.display = 'none';
+               }
+           };
+       }
+       // Click outside to close
+       deleteConfirmModal.onclick = (e) => {
+           if (e.target === deleteConfirmModal) {
+               deleteConfirmModal.style.display = 'none';
+           }
+       };
+   }
 });
 
 // 监听新增按钮点击

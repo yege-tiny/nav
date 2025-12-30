@@ -152,7 +152,7 @@ header {
     transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-.dark header {
+.dark body.custom-wallpaper header {
     background-color: transparent !important;
 }
 
