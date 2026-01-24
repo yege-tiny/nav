@@ -136,7 +136,6 @@ export async function onRequest(context) {
         shouldClearCookie = true;
     } else {
         const cacheKey = isAuthenticated ? 'home_html_private' : 'home_html_public';
-        console.log("cacheKey:",cacheKey)
         try {
           const cachedHtml = await env.NAV_AUTH.get(cacheKey);
           if (cachedHtml) {
@@ -1477,17 +1476,8 @@ export async function onRequest(context) {
       response.headers.append('Set-Cookie', 'iori_cache_stale=; Path=/; Max-Age=0; SameSite=Lax');
   }
 
-  if (layoutRandomWallpaper) {
-    // 强制禁用缓存，设置头部
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-    response.headers.set('Pragma', 'no-cache');
-    response.headers.set('Expires', '0');
-    
-    response.headers.append('Set-Cookie', `wallpaper_index=${nextWallpaperIndex}; Path=/; Max-Age=31536000; SameSite=Lax`);
-  }
-
-  // 写入缓存 (仅当未开启随机壁纸时)
-  if (isHomePage && !layoutRandomWallpaper) {
+  // 写入缓存 (只要不是管理员强制刷新或 Stale 状态，都应该写入缓存，包括随机壁纸开启的情况)
+  if (isHomePage) {
     const cacheKey = isAuthenticated ? 'home_html_private' : 'home_html_public';
     context.waitUntil(env.NAV_AUTH.put(cacheKey, html));
   }

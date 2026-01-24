@@ -883,10 +883,67 @@ document.addEventListener('DOMContentLoaded', function() {
           const transition = document.startViewTransition(() => {
               updateTheme();
           });
-
+          
           transition.finished.finally(() => {
               document.documentElement.classList.remove('theme-animating');
           });
       });
   }
+
+  // ========== Random Wallpaper Logic (Client-side) ==========
+  (async function() {
+      const config = window.IORI_LAYOUT_CONFIG || {};
+      if (!config.randomWallpaper) return;
+
+      const bgContainer = document.getElementById('fixed-background');
+      if (!bgContainer) return;
+
+      const img = bgContainer.querySelector('img');
+      // Get current index from cookie
+      const match = document.cookie.match(/wallpaper_index=(\d+)/);
+      const currentIndex = match ? parseInt(match[1]) : -1;
+
+      try {
+          const params = new URLSearchParams({
+              source: config.wallpaperSource || 'bing',
+              cid: config.wallpaperCid360 || '36',
+              country: config.bingCountry || '',
+              index: currentIndex
+          });
+
+          const res = await fetch(`/api/wallpaper?${params.toString()}`);
+          if (res.ok) {
+              const data = await res.json();
+              if (data.code === 200 && data.data && data.data.url) {
+                  const newUrl = data.data.url;
+                  const newIndex = data.data.index;
+
+                  // Preload image
+                  const newImg = new Image();
+                  newImg.src = newUrl;
+                  newImg.onload = () => {
+                      if (img) {
+                          img.style.transition = 'opacity 0.5s ease-in-out';
+                          img.style.opacity = '0';
+                          setTimeout(() => {
+                              img.src = newUrl;
+                              img.style.opacity = '1';
+                          }, 500);
+                      } else {
+                          // If no img tag exists (e.g. initial solid color), create one
+                          bgContainer.innerHTML = `<img src="${newUrl}" alt="" style="width: 100%; height: 100%; object-fit: cover; filter: blur(${config.enableBgBlur ? config.bgBlurIntensity : 0}px); transform: scale(1.02); opacity: 0; transition: opacity 0.5s ease-in-out;" />`;
+                          setTimeout(() => {
+                              bgContainer.querySelector('img').style.opacity = '1';
+                          }, 50);
+                      }
+                      
+                      // Update cookie for next rotation
+                      document.cookie = `wallpaper_index=${newIndex}; path=/; max-age=31536000; SameSite=Lax`;
+                  };
+              }
+          }
+      } catch (e) {
+          console.error('Failed to fetch random wallpaper:', e);
+      }
+  })();
 });
