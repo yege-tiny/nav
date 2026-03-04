@@ -27,9 +27,9 @@ export default {
     // 定义 API 列表
     const endpoints = [
       `https://www.google.com/s2/favicons?domain=${targetDomain}&sz=64`,
-      `https://favicon.im/${targetDomain}?larger=true`,
-      `https://icon.bqb.cool/?url=https://${targetDomain}`,
-      `https://www.faviconextractor.com/favicon/${targetDomain}?larger=true`
+      `https://www.faviconextractor.com/favicon/${targetDomain}?larger=true`,
+      `https://faviconsnap.com/api/favicon?url=${targetDomain}`,
+      `https://favicon.im/${targetDomain}?larger=true`
     ];
     const MIN_IMAGE_SIZE = 100;
     for (const targetUrl of endpoints) {
