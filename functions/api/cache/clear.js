@@ -15,6 +15,8 @@ export async function onRequestPost(context) {
     });
     // Clear stale cookie to prevent auto-refresh loop if any
     response.headers.append('Set-Cookie', 'iori_cache_stale=; Path=/; Max-Age=0; SameSite=Lax');
+    response.headers.append('Set-Cookie', 'iori_cache_public_stale=; Path=/; Max-Age=0; SameSite=Lax');
+    response.headers.append('Set-Cookie', 'iori_cache_private_stale=; Path=/; Max-Age=0; SameSite=Lax');
     return response;
   } catch (e) {
     return errorResponse(`Failed to clear cache: ${e.message}`, 500);

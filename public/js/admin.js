@@ -24,18 +24,6 @@ window.showMessage = function(text, type = 'info', cacheCleared = false) {
   messageDiv.style.display = 'block';
   
   if (type === 'success') {
-    // Check if this is a data mutation that requires cache refresh
-    // Filter out things like "Copied to clipboard" if any
-    if (text !== '已复制到剪贴板' && !text.includes('刷新成功')) {
-        if (cacheCleared) {
-            // Backend cleared cache automatically, reset frontend stale state
-            window.resetCacheStale();
-        } else {
-            // Backend didn't clear cache (manual mode), mark as stale
-            window.markCacheStale();
-        }
-    }
-    
     messageDiv.style.backgroundColor = '#d4edda';
     messageDiv.style.color = '#155724';
     messageDiv.style.border = '1px solid #c3e6cb';
@@ -550,7 +538,7 @@ function bindPendingActionEvents() {
 }
 
 function handlePendingAction(id, action) {
-  const method = action === 'approve' ? 'POST' : 'DELETE';
+  const method = action === 'approve' ? 'PUT' : 'DELETE';
   const url = `/api/pending/${id}`;
   
   fetch(url, { method: method })
@@ -558,6 +546,9 @@ function handlePendingAction(id, action) {
     .then(data => {
       if (data.code === 200 || data.code === 201) {
         window.showMessage(action === 'approve' ? '审批通过' : '已拒绝', 'success');
+        if (action === 'approve' && typeof window.markCacheStale === 'function') {
+          window.markCacheStale('all');
+        }
         fetchPendingConfigs();
         if (action === 'approve') fetchConfigs();
       } else {
@@ -714,6 +705,9 @@ window.performDelete = function(id) {
     .then(data => {
       if (data.code === 200) {
         window.showMessage('删除成功', 'success', data.cacheCleared);
+        if (typeof window.markCacheStale === 'function') {
+          window.markCacheStale('all');
+        }
         fetchConfigs();
       } else {
         window.showMessage(data.message || '删除失败', 'error');
@@ -796,7 +790,9 @@ function saveSortOrder() {
     Promise.all(updates)
       .then(() => {
         window.showMessage('排序已保存', 'success');
-        // Note: Cache is marked stale by showMessage
+        if (typeof window.markCacheStale === 'function') {
+          window.markCacheStale('all');
+        }
         // Update local memory data
         cards.forEach((card, index) => {
            const id = card.dataset.id;

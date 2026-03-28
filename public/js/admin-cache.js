@@ -28,14 +28,33 @@
 // Cache Management Logic
 // Separated from admin.js
 
-window.markCacheStale = function() {
-    // Set cookie to indicate stale cache (valid for 1 year)
-    // The backend will detect this cookie, clear KV cache, and then clear the cookie
-    document.cookie = "iori_cache_stale=1; path=/; max-age=31536000; SameSite=Lax";
+function setCacheCookie(name, value) {
+    document.cookie = `${name}=${value}; path=/; max-age=31536000; SameSite=Lax`;
 }
 
-window.resetCacheStale = function() {
-    // No-op: Cookie is cleared by backend response
+function clearCacheCookie(name) {
+    document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`;
+}
+
+window.markCacheStale = function(scope = 'all') {
+    if (scope === 'public' || scope === 'all') {
+        setCacheCookie('iori_cache_public_stale', '1');
+    }
+    if (scope === 'private' || scope === 'all') {
+        setCacheCookie('iori_cache_private_stale', '1');
+    }
+}
+
+window.resetCacheStale = function(scope = 'all') {
+    if (scope === 'public' || scope === 'all') {
+        clearCacheCookie('iori_cache_public_stale');
+    }
+    if (scope === 'private' || scope === 'all') {
+        clearCacheCookie('iori_cache_private_stale');
+    }
+    if (scope === 'all') {
+        clearCacheCookie('iori_cache_stale');
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

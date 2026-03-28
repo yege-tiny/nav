@@ -343,6 +343,7 @@ function deleteCategory(id) {
     }).then(res => res.json()).then(data => {
         if (data.code === 200) {
             window.showMessage('删除成功', 'success');
+            if (typeof window.markCacheStale === 'function') window.markCacheStale('all');
             // Refresh categories and also bookmarks configs because dropdowns/counts might change
             fetchCategories();
             if (typeof fetchConfigs === 'function') fetchConfigs();
@@ -427,6 +428,7 @@ function saveCategorySortOrder() {
         Promise.all(updates)
             .then(() => {
                 window.showMessage('分类排序已保存', 'success');
+                if (typeof window.markCacheStale === 'function') window.markCacheStale('all');
                 // Refresh to sync state
                 fetchCategories();
                 // Also refresh main config as order might affect things? Probably not but safe.
@@ -499,6 +501,7 @@ if (editCategoryForm) {
             .then(data => {
                 if (data.code === 200) {
                     window.showMessage('分类更新成功', 'success');
+                    if (typeof window.markCacheStale === 'function') window.markCacheStale('all');
                     editCategoryModal.style.display = 'none';
                     document.body.classList.remove('modal-open');
                     fetchCategories(categoryCurrentPage);
@@ -571,6 +574,7 @@ if (addCategoryForm) {
             .then(data => {
                 if (data.code === 201 || data.code === 200) {
                     window.showMessage('分类创建成功', 'success');
+                    if (typeof window.markCacheStale === 'function') window.markCacheStale(isPrivate ? 'private' : 'all');
                     addCategoryModal.style.display = 'none';
                     document.body.classList.remove('modal-open');
                     addCategoryForm.reset();
@@ -587,4 +591,3 @@ if (addCategoryForm) {
             });
     });
 }
-
