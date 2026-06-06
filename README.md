@@ -33,7 +33,6 @@
 | 首页 | 后台管理 |
 | :---: | :---: |
 | ![首页预览](https://github.com/user-attachments/assets/b106be25-5be4-4ae6-98aa-e1fae38b5a3d) | ![后台预览](https://github.com/user-attachments/assets/49461d13-e48b-400d-b15c-3fa2d1a0460e) |
-| ![首页预览](https://github.com/user-attachments/assets/4cb39e41-a7a5-46c7-876c-62021fa5611e) | ![后台预览](https://github.com/user-attachments/assets/4d3bb3f4-da65-400a-a41d-eeaecedb7197) |
 
 | 大卡片 | 小卡片 |
 | :---: | :---: |
@@ -42,6 +41,10 @@
 | 简洁风格 | 夜间模式 |
 | :---: | :---: |
 | ![简洁风格预览](https://github.com/user-attachments/assets/3a70b18a-5301-4218-a75f-869fbbdaa7a4) | ![夜间模式预览](https://github.com/user-attachments/assets/9e51cf5c-4064-4b8d-ad2c-e0ca9e006834) |
+
+| 设置界面 |
+| :---: |
+| ![设置界面预览](./image/setting.png) |
 
 > 💡 卡片的毛玻璃效果和程度可以在后台设置里自定义。后台设置页面为 URL 后加 `/admin`
 
@@ -124,8 +127,10 @@
 3. 点击 `添加绑定`，选择 `KV 命名空间`：
     - 变量名称：`NAV_AUTH`
     - KV 命名空间：选择你创建的 `NAV_AUTH`
+4. 如需使用 Cloudflare Workers AI，继续点击 `添加绑定`，选择 `Workers AI`：
+    - 变量名称：`AI`
 
-<img width="2152" height="1236" alt="绑定服务" src="https://github.com/user-attachments/assets/9dd15cd0-8173-4dec-af87-d8ef0bdeaa38" />
+<img width="2152" height="1236" alt="绑定服务" src="./image/bind.png" />
 
 ### 步骤 6：重新部署
 
@@ -163,8 +168,13 @@ npx wrangler d1 execute book --local --file=schema.sql
 | :--- | :--- | :--- |
 | `NAV_DB` | D1 | 主数据库绑定（必需） |
 | `NAV_AUTH` | KV | 会话、限流、缓存标记存储（必需） |
+### 2) 条件绑定（Pages 项目设置 -> 绑定）
 
-### 2) 可选变量（Pages 项目设置 -> 变量和机密）
+| 绑定名 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `AI` | Workers AI | 使用 Cloudflare Workers AI 生成描述时必需 |
+
+### 3) 可选变量（Pages 项目设置 -> 变量和机密）
 
 | 变量名 | 默认值 | 说明 |
 | :--- | :--- | :--- |
