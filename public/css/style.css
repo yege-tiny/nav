@@ -28,7 +28,7 @@
   margin-top: auto;
   /* 与 eooce/Nav-Item 页脚字体一致：桌面 14px，移动端 0.7rem */
   font-size: 14px;
-  /* 风格一/二：黑色；风格三在下方 media 中覆盖为白色 */
+  /* 桌面风格一/二：黑色；桌面风格三在下方 media 中覆盖为白色 */
   color: #111827;
 }
 
@@ -43,21 +43,23 @@
   color: rgba(17, 24, 39, 0.35);
 }
 
-/*
- * 风格一/二 + 深色模式 + 无壁纸：footer 背景为 dark:bg-gray-900，
- * 需浅色字；有壁纸时仍按风格用黑/白（风格三另有规则）。
- */
-html.dark body:not(.custom-wallpaper) #app-scroll > .main-content > footer {
-  color: #e5e7eb;
-}
-
-html.dark body:not(.custom-wallpaper) #app-scroll > .main-content > footer .text-gray-300 {
-  color: rgba(229, 231, 235, 0.45);
-}
-
 @media (max-width: 768px) {
   #app-scroll > .main-content > footer {
     font-size: 0.7rem;
+  }
+}
+
+/* 手机端不区分卡片风格，页脚统一使用白色文字 */
+@media (max-width: 767px) {
+  #app-scroll > .main-content > footer,
+  #app-scroll > .main-content > footer a,
+  #app-scroll > .main-content > footer p,
+  #app-scroll > .main-content > footer span {
+    color: #ffffff !important;
+  }
+
+  #app-scroll > .main-content > footer .text-gray-300 {
+    color: rgba(255, 255, 255, 0.35) !important;
   }
 }
 
